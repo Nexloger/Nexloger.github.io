@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nexloger | Initialize Identity</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
+        body { font-family: 'JetBrains Mono', monospace; background-color: #050505; }
+    </style>
+</head>
+<body class="text-zinc-400 h-screen flex items-center justify-center p-6">
+
+    <div class="w-full max-w-sm border border-zinc-900 bg-[#080808] p-10 space-y-8 shadow-2xl">
+        <div class="space-y-2 text-center">
+            <h2 class="text-white font-bold tracking-tighter text-2xl italic uppercase">Initialize_New</h2>
+            <p class="text-[9px] text-zinc-600 uppercase tracking-widest leading-loose">Register a new identity to the core</p>
+        </div>
+
+        <div class="space-y-4">
+            <div class="space-y-1">
+                <label class="text-[8px] text-zinc-700 uppercase ml-1">Terminal_Email</label>
+                <input id="reg-email" type="email" placeholder="USER@TERMINAL" class="w-full bg-[#0a0a0a] border border-zinc-800 p-3 text-xs text-zinc-200 outline-none focus:border-zinc-500">
+            </div>
+            <div class="space-y-1">
+                <label class="text-[8px] text-zinc-700 uppercase ml-1">Display_Name</label>
+                <input id="reg-name" type="text" placeholder="GHOST_IN_SHELL" class="w-full bg-[#0a0a0a] border border-zinc-800 p-3 text-xs text-zinc-200 outline-none focus:border-zinc-500">
+            </div>
+            <div class="space-y-1">
+                <label class="text-[8px] text-zinc-700 uppercase ml-1">Access_Code</label>
+                <input id="reg-pass" type="password" placeholder="********" class="w-full bg-[#0a0a0a] border border-zinc-800 p-3 text-xs text-zinc-200 outline-none focus:border-zinc-500">
+            </div>
+            <button id="reg-submit" class="w-full bg-zinc-200 text-black py-4 text-[10px] font-black hover:bg-white transition-all uppercase tracking-[0.2em] mt-4">Deploy_Identity</button>
+        </div>
+
+        <div class="text-center pt-2">
+            <a href="login.html" class="text-[9px] text-zinc-700 hover:text-zinc-400 uppercase tracking-widest">Back to Login</a>
+        </div>
+        <div id="reg-msg" class="text-[9px] text-center text-red-900 uppercase h-2 font-bold"></div>
+    </div>
+
+    <script type="module">
+        import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm'
+        const supabase = createClient('YOUR_URL', 'YOUR_KEY')
+
+// signup.html 内の JS 修正箇所
+document.getElementById('reg-submit').onclick = async () => {
+    // ... 入力値の取得 ...
+    
+    const { error } = await supabase.from('nex_users').insert({
+        email: email,
+        display_name: name,
+        password_hash: pass,
+        status: 'pending' // デフォルトを保留状態にする
+    });
+
+    if (!error) {
+        // 成功したら検証画面へ飛ばす
+        window.location.href = `verify.html?email=${encodeURIComponent(email)}`;
+    } else {
+        msg.innerText = 'REGISTRATION_ERROR';
+    }
+};
+    </script>
+</body>
+</html>

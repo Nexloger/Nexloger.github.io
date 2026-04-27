@@ -1,0 +1,168 @@
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm'
+
+// --- 1. CONFIG ---
+const SUPABASE_URL = 'https://zphmbedascwcoddrserg.supabase.co'
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpwaG1iZWRhc2N3Y29kZHJzZXJnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcyNTQ3NTIsImV4cCI6MjA5MjgzMDc1Mn0.MnnGK-V4vRC8Y_ILWlUiLNkMppWDi53S9RBUpKR2amE'
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
+
+let currentBoxId = null
+let currentUser = null 
+
+// --- 2. AUTH LOGIC (独自実装) ---
+
+/**
+ * セッションの有効性を確認し、UIを更新する
+ */
+async function checkNexAuth() {
+    const token = localStorage.getItem('nex_token');
+    const status = document.getElementById('status');
+    const userProfile = document.getElementById('user-profile');
+    const authNav = document.getElementById('auth-nav');
+    const userDisplay = document.getElementById('user-display');
+
+    if (!token) {
+        // トークンがない場合はログイン画面へ強制移動
+        window.location.href = 'login.html';
+        return;
+    }
+
+    // DB側のセッションテーブルを照合
+    const { data: session, error } = await supabase
+        .from('nex_sessions')
+        .select('*, nex_users(*)')
+        .eq('token', token)
+        .maybeSingle();
+
+    if (error || !session || new Date(session.expires_at) < new Date()) {
+        localStorage.removeItem('nex_token');
+        window.location.href = 'login.html';
+        return;
+    }
+
+    // 認証成功: グローバル変数にユーザー情報を格納
+    currentUser = session.nex_users;
+
+    // UI更新
+    if (authNav) authNav.classList.add('hidden');
+    if (userProfile) userProfile.classList.remove('hidden');
+    if (userDisplay) userDisplay.innerText = currentUser.display_name;
+    if (status) {
+        status.innerText = 'ACTIVE_LINK';
+        status.classList.replace('text-zinc-600', 'text-emerald-500');
+    }
+
+    // アプリ本体の初期化
+    init();
+}
+
+/**
+ * ログアウト処理
+ */
+function handleLogout() {
+    localStorage.removeItem('nex_token');
+    window.location.reload();
+}
+
+// --- 3. APP LOGIC ---
+
+async function loadMessages(boxId) {
+    const feed = document.getElementById('feed')
+    const { data, error } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('box_id', boxId)
+        .order('created_at', { ascending: true })
+
+    if (error) return console.error(error)
+
+    feed.innerHTML = data.map(msg => `
+        <article class="border-l border-zinc-800 pl-4 py-1 animate-in fade-in slide-in-from-left-1">
+            <div class="flex items-center gap-2 mb-1">
+                <span class="text-[10px] font-bold text-zinc-500 uppercase">${msg.sender || 'ANON'}</span>
+                <span class="text-[9px] text-zinc-700">${new Date(msg.created_at).toLocaleTimeString()}</span>
+            </div>
+            <p class="text-sm text-zinc-300">${msg.content}</p>
+        </article>
+    `).join('')
+    feed.scrollTop = feed.scrollHeight
+}
+
+async function sendLog() {
+    const input = document.getElementById('message-input')
+    if (!input.value.trim() || !currentBoxId || !currentUser) return
+
+    const { error } = await supabase.from('messages').insert({
+        content: input.value,
+        box_id: currentBoxId,
+        sender: currentUser.display_name,
+        sender_icon: currentUser.sender_icon
+    })
+
+    if (!error) {
+        input.value = ''
+        input.style.height = 'auto'
+    }
+}
+
+function subscribe(boxId) {
+    supabase.removeAllChannels()
+    supabase.channel('logs')
+        .on('postgres_changes', { 
+            event: 'INSERT', 
+            schema: 'public', 
+            table: 'messages', 
+            filter: `box_id=eq.${boxId}` 
+        }, () => loadMessages(boxId))
+        .subscribe()
+}
+
+async function init() {
+    const { data: boxes } = await supabase.from('boxes').select('*')
+    const boxList = document.getElementById('box-list')
+
+    if (boxes && boxes.length > 0) {
+        boxList.innerHTML = boxes.map(box => `
+            <li class="cursor-pointer p-2 text-xs hover:bg-zinc-900 rounded transition" data-id="${box.id}">
+                # ${box.title}
+            </li>
+        `).join('')
+
+        currentBoxId = boxes[0].id
+        document.getElementById('current-title').innerText = boxes[0].title
+        loadMessages(currentBoxId)
+        subscribe(currentBoxId)
+
+        boxList.querySelectorAll('li').forEach(el => {
+            el.onclick = () => {
+                currentBoxId = el.dataset.id
+                document.getElementById('current-title').innerText = el.innerText
+                loadMessages(currentBoxId)
+                subscribe(currentBoxId)
+            }
+        })
+    }
+}
+
+// --- 4. RUN ---
+document.addEventListener('DOMContentLoaded', () => {
+    // 起動時に認証チェック
+    checkNexAuth();
+
+    // イベントリスナーの紐付け
+    const sendBtn = document.getElementById('send-btn');
+    const logoutBtn = document.getElementById('logout-btn');
+    const msgInput = document.getElementById('message-input');
+
+    if (sendBtn) sendBtn.onclick = sendLog;
+    if (logoutBtn) logoutBtn.onclick = handleLogout;
+    
+    if (msgInput) {
+        msgInput.onkeydown = (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendLog();
+            }
+        }
+    }
+})

@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>Nexloger | Verify Identity</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
+        body { font-family: 'JetBrains Mono', monospace; background-color: #050505; }
+    </style>
+</head>
+<body class="text-zinc-400 h-screen flex items-center justify-center p-6">
+    <div class="w-full max-w-sm border border-zinc-900 bg-[#080808] p-10 space-y-8">
+        <div class="space-y-2 text-center">
+            <h2 class="text-white font-bold tracking-tighter text-2xl italic uppercase">Verifying...</h2>
+            <p id="target-email" class="text-[9px] text-zinc-500 break-all"></p>
+            <p class="text-[9px] text-zinc-600 uppercase tracking-widest leading-loose">Waiting for core synchronization</p>
+        </div>
+
+        <div class="flex justify-center">
+            <div class="w-12 h-1 border-t border-zinc-700 animate-pulse"></div>
+        </div>
+
+        <button id="verify-action" class="w-full bg-zinc-200 text-black py-4 text-[10px] font-black hover:bg-white transition-all uppercase tracking-[0.2em]">Activate_Link</button>
+        
+        <div id="verify-msg" class="text-[9px] text-center text-zinc-500 uppercase"></div>
+    </div>
+
+    <script type="module">
+        import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm'
+        const supabase = createClient('URL', 'KEY')
+        
+        const params = new URLSearchParams(window.location.search);
+        const email = params.get('email');
+        document.getElementById('target-email').innerText = email;
+
+        document.getElementById('verify-action').onclick = async () => {
+            // ここで status を active に更新する処理（本来は検証コードが必要）
+            const { error } = await supabase
+                .from('nex_users')
+                .update({ status: 'active' })
+                .eq('email', email);
+
+            if (!error) {
+                document.getElementById('verify-msg').innerText = 'LINK_ESTABLISHED';
+                setTimeout(() => window.location.href = 'login.html', 1500);
+            }
+        };
+    </script>
+</body>
+</html>
