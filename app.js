@@ -9,7 +9,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
 let currentBoxId = null
 let currentUser = null 
 
-// --- 2. AUTH LOGIC (独自実装) ---
+// --- 2. AUTH LOGIC ---
 
 /**
  * セッションの有効性を確認し、UIを更新する
@@ -20,33 +20,39 @@ async function checkNexAuth() {
     const userProfile = document.getElementById('user-profile');
     const authNav = document.getElementById('auth-nav');
     const userDisplay = document.getElementById('user-display');
+    const authOverlay = document.getElementById('auth-overlay');
 
+    // 1. トークンがない場合
     if (!token) {
-        // トークンがない場合はログイン画面へ強制移動
-        window.location.href = 'login.html';
+        if (authOverlay) authOverlay.classList.remove('hidden');
+        if (status) status.innerText = 'OFFLINE';
         return;
     }
 
-    // DB側のセッションテーブルを照合
+    // 2. DB側のセッションテーブルを照合
     const { data: session, error } = await supabase
         .from('nex_sessions')
         .select('*, nex_users(*)')
         .eq('token', token)
         .maybeSingle();
 
+    // セッション無効またはエラー
     if (error || !session || new Date(session.expires_at) < new Date()) {
         localStorage.removeItem('nex_token');
-        window.location.href = 'login.html';
+        if (authOverlay) authOverlay.classList.remove('hidden');
+        if (status) status.innerText = 'AUTH_REQUIRED';
         return;
     }
 
-    // 認証成功: グローバル変数にユーザー情報を格納
+    // 3. 認証成功
     currentUser = session.nex_users;
 
     // UI更新
+    if (authOverlay) authOverlay.classList.add('hidden');
     if (authNav) authNav.classList.add('hidden');
     if (userProfile) userProfile.classList.remove('hidden');
     if (userDisplay) userDisplay.innerText = currentUser.display_name;
+    
     if (status) {
         status.innerText = 'ACTIVE_LINK';
         status.classList.replace('text-zinc-600', 'text-emerald-500');
@@ -146,10 +152,8 @@ async function init() {
 
 // --- 4. RUN ---
 document.addEventListener('DOMContentLoaded', () => {
-    // 起動時に認証チェック
     checkNexAuth();
 
-    // イベントリスナーの紐付け
     const sendBtn = document.getElementById('send-btn');
     const logoutBtn = document.getElementById('logout-btn');
     const msgInput = document.getElementById('message-input');
