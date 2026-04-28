@@ -119,14 +119,13 @@ modalTransmitBtn.onclick = async () => {
         if (file) {
             const fileName = `${Date.now()}_${file.name}`;
             
-            // バケット名を 'log-images' に統一
+            // バケット名を 'log-images' に変更
             const { error: uploadError } = await supabase.storage
                 .from('log-images')
                 .upload(fileName, file);
 
             if (uploadError) throw uploadError;
 
-            // URL取得も 'log-images' から
             const { data } = supabase.storage
                 .from('log-images')
                 .getPublicUrl(fileName);
