@@ -19,101 +19,9 @@ const modalImageInput = document.getElementById('modal-image-input');
 const imagePreview = document.getElementById('image-preview');
 const fileStatus = document.getElementById('file-status');
 
-// --- 3. MODAL LOGIC ---
+// --- 3. FUNCTIONS ---
 
-// モーダルを開く
-openModalBtn.onclick = () => {
-    if (!currentUser) {
-        document.getElementById('auth-overlay').classList.remove('hidden');
-        return;
-    }
-    modalSectorName.innerText = document.getElementById('current-title').innerText;
-    postModal.classList.remove('hidden');
-};
-
-// モーダルを閉じる
-closeModalBtn.onclick = () => {
-    postModal.classList.add('hidden');
-    resetForm();
-};
-
-// プレビュー表示
-modalImageInput.onchange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-        fileStatus.innerText = `READY: ${file.name}`;
-        const reader = new FileReader();
-        reader.onload = (re) => {
-            imagePreview.querySelector('img').src = re.target.result;
-            imagePreview.classList.remove('hidden');
-        };
-        reader.readAsDataURL(file);
-    }
-};
-
-function resetForm() {
-    modalContent.value = '';
-    modalImageInput.value = '';
-    imagePreview.classList.add('hidden');
-    fileStatus.innerText = 'Attach_Media_Payload';
-}
-
-// --- 4. CORE TRANSMISSION (送信処理) ---
-
-modalTransmitBtn.onclick = async () => {
-    const content = modalContent.value.trim();
-    const file = modalImageInput.files[0];
-    
-    if (!content || !currentBoxId || !currentUser) return;
-
-    modalTransmitBtn.innerText = 'TRANSMITTING...';
-    modalTransmitBtn.disabled = true;
-
-    let imageUrl = null;
-
-    try {
-        // A. 画像がある場合はStorageにアップ
-        if (file) {
-            const fileExt = file.name.split('.').pop();
-            const fileName = `${Math.random()}_${Date.now()}.${fileExt}`;
-            const filePath = `public/${fileName}`;
-
-            const { error: uploadError } = await supabase.storage
-                .from('log-images') // 作成したバケット名
-                .upload(filePath, file);
-
-            if (uploadError) throw uploadError;
-
-            // 公開URLの取得
-            const { data } = supabase.storage.from('log-images').getPublicUrl(filePath);
-            imageUrl = data.publicUrl;
-        }
-
-        // B. DBにメッセージを登録
-        const { error: dbError } = await supabase.from('messages').insert({
-            content: content,
-            box_id: currentBoxId,
-            sender: currentUser.display_name,
-            image_url: imageUrl
-        });
-
-        if (dbError) throw dbError;
-
-        // 成功時
-        postModal.classList.add('hidden');
-        resetForm();
-
-    } catch (err) {
-        console.error('Transmission_Error:', err);
-        alert(`CRITICAL_ERROR: ${err.message}`);
-    } finally {
-        modalTransmitBtn.innerText = 'Transmit_Data_Stream';
-        modalTransmitBtn.disabled = false;
-    }
-};
-
-// --- 5. INITIALIZATION & AUTH (既存のものを統合) ---
-
+// ログインチェック
 async function checkAuth() {
     const token = localStorage.getItem('nex_token');
     if (!token) return;
@@ -130,123 +38,47 @@ async function checkAuth() {
         document.getElementById('auth-nav').classList.add('hidden');
         document.getElementById('user-profile').classList.remove('hidden');
         document.getElementById('user-display').innerText = currentUser.display_name;
+        console.log("AUTH_LOADED:", currentUser.display_name);
     }
-    init();
 }
 
-
-modalTransmitBtn.onclick = async () => {
-    const content = modalContent.value.trim();
-    const file = modalImageInput.files[0];
-    
-    // バリデーション：本文がない、または未選択セクターなら中断
-    if (!content || !currentBoxId || !currentUser) return;
-
-    // UIを「送信中」状態にロック
-    modalTransmitBtn.innerText = 'TRANSMITTING...';
-    modalTransmitBtn.disabled = true;
-
-    let imageUrl = null;
-
-    try {
-        // STEP 1: 画像がある場合のみ、Supabase Storageにアップロード
-        if (file) {
-            // ファイル名の衝突を避けるためユニークな名前を生成
-            const fileExt = file.name.split('.').pop();
-            const fileName = `${Math.random().toString(36).substring(2)}_${Date.now()}.${fileExt}`;
-            const filePath = `public/${fileName}`;
-
-            const { error: uploadError } = await supabase.storage
-                .from('log-images') // 作成したバケット名
-                .upload(filePath, file);
-
-            if (uploadError) throw uploadError;
-
-            // アップロードしたファイルの公開URLを取得
-            const { data } = supabase.storage.from('log-images').getPublicUrl(filePath);
-            imageUrl = data.publicUrl;
-        }
-
-        // STEP 2: messagesテーブルへ投稿データを挿入
-        const { error: dbError } = await supabase.from('messages').insert({
-            content: content,
-            box_id: currentBoxId,
-            sender: currentUser.display_name,
-            image_url: imageUrl // 画像がない場合は null が入る
-        });
-
-        if (dbError) throw dbError;
-
-        // 成功：モーダルを閉じて入力内容をリセット
-        postModal.classList.add('hidden');
-        resetForm();
-
-    } catch (err) {
-        // 失敗：エラー内容をアラートで表示
-        console.error('Transmission_Error:', err);
-        alert(`CRITICAL_ERROR: ${err.message}`);
-    } finally {
-        // UIロックを解除
-        modalTransmitBtn.innerText = 'Transmit_Data_Stream';
-        modalTransmitBtn.disabled = false;
-    }
-};
-
-// modalTransmitBtn.onclick の try-catch 内を少し強化
-try {
-    // ... 画像アップロード処理 ...
-
-    const { error: dbError } = await supabase.from('messages').insert({
-        content: content,
-        box_id: currentBoxId,
-        sender: currentUser.display_name,
-        image_url: imageUrl
-    });
-
-    if (dbError) {
-        // 連投制限エラーの判定
-        if (dbError.message.includes('RATE_LIMIT_EXCEEDED')) {
-            alert("⚠ SECURITY_ALERT: 連投が検知されました。1分待機してください。");
-        } else {
-            throw dbError;
-        }
-        return;
-    }
-
-    // ... 成功時の処理 ...
-} catch (err) {
-    console.error('Transmission_Error:', err);
-    alert(`CRITICAL_ERROR: ${err.message}`);
-}
-
+// メッセージ読み込み
 async function loadMessages(boxId) {
     const feed = document.getElementById('feed');
-    const { data } = await supabase
+    const { data, error } = await supabase
         .from('messages')
         .select('*')
         .eq('box_id', boxId)
         .order('created_at', { ascending: true });
 
-    if (data) {
-        feed.innerHTML = data.map(msg => `
-            <article class="border-l border-emerald-500/30 pl-4 py-2 animate-in fade-in slide-in-from-left-2">
-                <div class="flex items-center gap-2 mb-1">
-                    <span class="text-[10px] font-bold text-emerald-500 uppercase mono tracking-tighter">${msg.sender}</span>
-                    <span class="text-[8px] text-zinc-600 mono">${new Date(msg.created_at).toLocaleTimeString()}</span>
+    if (error) {
+        console.error("LOAD_ERROR:", error);
+        return;
+    }
+
+    feed.innerHTML = data.map(msg => `
+        <a href="posts.html?id=${msg.id}" class="block group">
+            <article class="border-l-2 border-emerald-500/20 pl-4 py-3 hover:border-emerald-500/60 hover:bg-white/2 transition-all rounded-r-2xl">
+                <div class="flex justify-between items-start mb-2">
+                    <div class="flex items-center gap-2">
+                        <span class="text-[10px] font-bold text-emerald-500 uppercase mono tracking-tighter">${msg.sender}</span>
+                        <span class="text-[8px] text-zinc-600 mono">${new Date(msg.created_at).toLocaleTimeString()}</span>
+                    </div>
+                    <span class="text-[10px] text-zinc-700 group-hover:text-emerald-500 transition-colors mono">VIEW_LOG →</span>
                 </div>
                 <p class="text-sm text-zinc-300 leading-relaxed">${msg.content}</p>
                 ${msg.image_url ? `
-                    <div class="mt-3 rounded-xl overflow-hidden border border-white/5 max-w-sm">
-                        <img src="${msg.image_url}" class="w-full h-auto object-cover opacity-80 hover:opacity-100 transition-opacity">
+                    <div class="mt-3 rounded-xl overflow-hidden border border-white/5 max-w-sm group-hover:border-emerald-500/30 transition-all">
+                        <img src="${msg.image_url}" class="w-full h-auto object-cover opacity-80 group-hover:opacity-100 transition-opacity">
                     </div>
                 ` : ''}
             </article>
-        `).join('');
-        feed.scrollTop = feed.scrollHeight;
-    }
+        </a>
+    `).join('');
+    feed.scrollTop = feed.scrollHeight;
 }
 
-// ... init(), subscribe() などの既存ロジック ...
+// セクター初期化
 async function init() {
     const { data: boxes } = await supabase.from('boxes').select('*');
     if (boxes && boxes.length > 0) {
@@ -271,4 +103,115 @@ async function init() {
     }
 }
 
-document.addEventListener('DOMContentLoaded', checkAuth);
+function resetForm() {
+    modalContent.value = '';
+    modalImageInput.value = '';
+    imagePreview.classList.add('hidden');
+    fileStatus.innerText = 'Attach_Media_Payload';
+}
+
+// --- 4. EVENT LISTENERS ---
+
+// DOM読み込み完了時に実行
+document.addEventListener('DOMContentLoaded', async () => {
+    await checkAuth(); // 1. ログイン確認
+    await init();      // 2. データ初期化
+
+    // モーダルを開く
+    if (openModalBtn) {
+        openModalBtn.onclick = () => {
+            if (!currentUser) {
+                document.getElementById('auth-overlay').classList.remove('hidden');
+                return;
+            }
+            modalSectorName.innerText = document.getElementById('current-title').innerText;
+            postModal.classList.remove('hidden');
+        };
+    }
+
+    // モーダルを閉じる
+    if (closeModalBtn) {
+        closeModalBtn.onclick = () => {
+            postModal.classList.add('hidden');
+            resetForm();
+        };
+    }
+
+    // 画像プレビュー
+    if (modalImageInput) {
+        modalImageInput.onchange = (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                fileStatus.innerText = `READY: ${file.name}`;
+                const reader = new FileReader();
+                reader.onload = (re) => {
+                    imagePreview.querySelector('img').src = re.target.result;
+                    imagePreview.classList.remove('hidden');
+                };
+                reader.readAsDataURL(file);
+            }
+        };
+    }
+
+    // 送信処理
+    if (modalTransmitBtn) {
+        modalTransmitBtn.onclick = async () => {
+            const content = modalContent.value.trim();
+            const file = modalImageInput.files[0];
+            
+            if (!content || !currentBoxId || !currentUser) {
+                alert("SYSTEM_ERROR: 入力が不完全です。");
+                return;
+            }
+
+            modalTransmitBtn.innerText = 'TRANSMITTING...';
+            modalTransmitBtn.disabled = true;
+
+            let imageUrl = null;
+
+            try {
+                // A. 画像アップロード
+                if (file) {
+                    const fileExt = file.name.split('.').pop();
+                    const fileName = `${Math.random().toString(36).substring(2)}_${Date.now()}.${fileExt}`;
+                    const filePath = `public/${fileName}`;
+
+                    const { error: uploadError } = await supabase.storage
+                        .from('log-images')
+                        .upload(filePath, file);
+
+                    if (uploadError) throw uploadError;
+
+                    const { data } = supabase.storage.from('log-images').getPublicUrl(filePath);
+                    imageUrl = data.publicUrl;
+                }
+
+                // B. DB挿入
+                const { error: dbError } = await supabase.from('messages').insert({
+                    content: content,
+                    box_id: currentBoxId,
+                    sender: currentUser.display_name,
+                    image_url: imageUrl
+                });
+
+                if (dbError) {
+                    if (dbError.message.includes('RATE_LIMIT_EXCEEDED')) {
+                        throw new Error("連投制限です。1分待機してください。");
+                    }
+                    throw dbError;
+                }
+
+                // C. 完了処理
+                postModal.classList.add('hidden');
+                resetForm();
+                loadMessages(currentBoxId); // フィードを更新
+
+            } catch (err) {
+                alert(`CRITICAL_ERROR: ${err.message}`);
+            } finally {
+                modalTransmitBtn.innerText = 'Transmit_Data_Stream';
+                modalTransmitBtn.disabled = false;
+            }
+        };
+    }
+});
