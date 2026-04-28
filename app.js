@@ -14,21 +14,45 @@ let currentUser = null
 /**
  * セッションの有効性を確認し、UIを更新する
  */
+// --- 2. AUTH LOGIC (修正版) ---
 async function checkNexAuth() {
     const token = localStorage.getItem('nex_token');
-    const status = document.getElementById('status');
-    const userProfile = document.getElementById('user-profile');
-    const authNav = document.getElementById('auth-nav');
-    const userDisplay = document.getElementById('user-display');
-    const authOverlay = document.getElementById('auth-overlay');
-
-    // 1. トークンがない場合
+    
+    // トークンがない？ → それでもOK！アプリはそのまま動かす。
     if (!token) {
-        if (authOverlay) authOverlay.classList.remove('hidden');
-        if (status) status.innerText = 'OFFLINE';
+        setupGuestUI(); // ゲスト用の表示に整える
+        init(); // 認証なしで中身を読み込む
         return;
     }
 
+    // トークンがある場合は、今まで通り有効性をチェック
+    const { data: session } = await supabase
+        .from('nex_sessions')
+        .select('*, nex_users(*)')
+        .eq('token', token)
+        .maybeSingle();
+
+    if (session && new Date(session.expires_at) > new Date()) {
+        currentUser = session.nex_users;
+        setupUserUI(); // ログイン済みの表示
+        init();
+    } else {
+        localStorage.removeItem('nex_token');
+        setupGuestUI();
+        init();
+    }
+}
+
+// ゲスト（未ログイン）用のUI調整
+function setupGuestUI() {
+    const overlay = document.getElementById('auth-overlay');
+    const authNav = document.getElementById('auth-nav');
+    const userProfile = document.getElementById('user-profile');
+
+    if (overlay) overlay.classList.add('hidden'); // 勝手に隠しておく
+    if (authNav) authNav.classList.remove('hidden');
+    if (userProfile) userProfile.classList.add('hidden');
+}
     // 2. DB側のセッションテーブルを照合
     const { data: session, error } = await supabase
         .from('nex_sessions')
@@ -60,7 +84,6 @@ async function checkNexAuth() {
 
     // アプリ本体の初期化
     init();
-}
 
 /**
  * ログアウト処理
