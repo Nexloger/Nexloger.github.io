@@ -192,6 +192,33 @@ modalTransmitBtn.onclick = async () => {
     }
 };
 
+// modalTransmitBtn.onclick の try-catch 内を少し強化
+try {
+    // ... 画像アップロード処理 ...
+
+    const { error: dbError } = await supabase.from('messages').insert({
+        content: content,
+        box_id: currentBoxId,
+        sender: currentUser.display_name,
+        image_url: imageUrl
+    });
+
+    if (dbError) {
+        // 連投制限エラーの判定
+        if (dbError.message.includes('RATE_LIMIT_EXCEEDED')) {
+            alert("⚠ SECURITY_ALERT: 連投が検知されました。1分待機してください。");
+        } else {
+            throw dbError;
+        }
+        return;
+    }
+
+    // ... 成功時の処理 ...
+} catch (err) {
+    console.error('Transmission_Error:', err);
+    alert(`CRITICAL_ERROR: ${err.message}`);
+}
+
 async function loadMessages(boxId) {
     const feed = document.getElementById('feed');
     const { data } = await supabase
