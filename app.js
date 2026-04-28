@@ -36,9 +36,10 @@ async function checkAuth() {
 
     if (session && session.nex_users) {
         currentUser = session.nex_users;
-        document.getElementById('auth-nav').classList.add('hidden');
-        document.getElementById('user-profile').classList.remove('hidden');
-        document.getElementById('user-display').innerText = currentUser.display_name;
+        document.getElementById('auth-nav')?.classList.add('hidden');
+        document.getElementById('user-profile')?.classList.remove('hidden');
+        const userDisplay = document.getElementById('user-display');
+        if (userDisplay) userDisplay.innerText = currentUser.display_name;
     } else {
         localStorage.removeItem('nex_token');
     }
@@ -46,8 +47,8 @@ async function checkAuth() {
 
 async function loadMessages(boxId) {
     if (!boxId) return;
-    const { data } = await supabase.from('messages').select('*').eq('box_id', boxId).order('created_at', { ascending: true });
-    if (!data) return;
+    const { data, error } = await supabase.from('messages').select('*').eq('box_id', boxId).order('created_at', { ascending: true });
+    if (error || !data) return;
 
     feed.innerHTML = data.map(msg => `
         <article class="border-l-2 border-emerald-500/20 pl-4 py-3 mb-4 bg-white/5 rounded-r-2xl">
@@ -67,16 +68,20 @@ async function loadMessages(boxId) {
 }
 
 async function init() {
-    const { data: boxes } = await supabase.from('boxes').select('*').order('created_at', { ascending: true });
+    const { data: boxes, error } = await supabase.from('boxes').select('*').order('created_at', { ascending: true });
+    if (error) return;
+
     if (boxes && boxes.length > 0) {
         boxList.innerHTML = boxes.map(b => `<li class="cursor-pointer p-3 text-[11px] hover:bg-white/5 rounded-xl transition-all mono uppercase tracking-widest text-zinc-500 hover:text-white" data-id="${b.id}"># ${b.title}</li>`).join('');
         currentBoxId = boxes[0].id;
-        document.getElementById('current-title').innerText = boxes[0].title;
+        const titleEl = document.getElementById('current-title');
+        if (titleEl) titleEl.innerText = boxes[0].title;
         loadMessages(currentBoxId);
+        
         boxList.querySelectorAll('li').forEach(li => {
             li.onclick = () => {
                 currentBoxId = li.getAttribute('data-id');
-                document.getElementById('current-title').innerText = li.innerText.replace('# ', '').trim();
+                if (titleEl) titleEl.innerText = li.innerText.replace('# ', '').trim();
                 loadMessages(currentBoxId);
             };
         });
@@ -88,11 +93,18 @@ async function init() {
 document.addEventListener('DOMContentLoaded', () => { checkAuth(); init(); });
 
 if (openModalBtn) openModalBtn.onclick = () => {
-    if (!currentUser) { document.getElementById('auth-overlay').classList.remove('hidden'); return; }
+    if (!currentUser) { 
+        document.getElementById('auth-overlay')?.classList.remove('hidden'); 
+        return; 
+    }
     postModal.classList.remove('hidden');
 };
 
-if (closeModalBtn) closeModalBtn.onclick = () => postModal.classList.add('hidden');
+if (closeModalBtn) closeModalBtn.onclick = () => {
+    postModal.classList.add('hidden');
+    modalContent.value = '';
+    if (modalImageInput) modalImageInput.value = '';
+};
 
 modalTransmitBtn.onclick = async () => {
     const content = modalContent.value.trim();
@@ -100,29 +112,45 @@ modalTransmitBtn.onclick = async () => {
     if (!content || !currentBoxId || !currentUser) return;
 
     modalTransmitBtn.innerText = 'TRANSMITTING...';
+    modalTransmitBtn.disabled = true;
+
     try {
         let imageUrl = null;
         if (file) {
             const fileName = `${Date.now()}_${file.name}`;
-            // バケット名 'public' を指定
-            const { error: uploadError } = await supabase.storage.from('public').upload(fileName, file);
+            
+            // バケット名を 'log-images' に統一
+            const { error: uploadError } = await supabase.storage
+                .from('log-images')
+                .upload(fileName, file);
+
             if (uploadError) throw uploadError;
 
-            const { data } = supabase.storage.from('public').getPublicUrl(fileName);
+            // URL取得も 'log-images' から
+            const { data } = supabase.storage
+                .from('log-images')
+                .getPublicUrl(fileName);
+            
             imageUrl = data.publicUrl;
         }
 
         const { error: dbError } = await supabase.from('messages').insert({
-            content, box_id: currentBoxId, sender: currentUser.display_name, image_url: imageUrl
+            content, 
+            box_id: currentBoxId, 
+            sender: currentUser.display_name, 
+            image_url: imageUrl
         });
+
         if (dbError) throw dbError;
 
         postModal.classList.add('hidden');
         modalContent.value = '';
+        if (modalImageInput) modalImageInput.value = '';
         loadMessages(currentBoxId);
     } catch (err) {
         alert("ERROR: " + err.message);
     } finally {
         modalTransmitBtn.innerText = 'Transmit_Data_Stream';
+        modalTransmitBtn.disabled = false;
     }
 };
