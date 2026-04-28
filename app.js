@@ -134,6 +134,64 @@ async function checkAuth() {
     init();
 }
 
+
+modalTransmitBtn.onclick = async () => {
+    const content = modalContent.value.trim();
+    const file = modalImageInput.files[0];
+    
+    // バリデーション：本文がない、または未選択セクターなら中断
+    if (!content || !currentBoxId || !currentUser) return;
+
+    // UIを「送信中」状態にロック
+    modalTransmitBtn.innerText = 'TRANSMITTING...';
+    modalTransmitBtn.disabled = true;
+
+    let imageUrl = null;
+
+    try {
+        // STEP 1: 画像がある場合のみ、Supabase Storageにアップロード
+        if (file) {
+            // ファイル名の衝突を避けるためユニークな名前を生成
+            const fileExt = file.name.split('.').pop();
+            const fileName = `${Math.random().toString(36).substring(2)}_${Date.now()}.${fileExt}`;
+            const filePath = `public/${fileName}`;
+
+            const { error: uploadError } = await supabase.storage
+                .from('log-images') // 作成したバケット名
+                .upload(filePath, file);
+
+            if (uploadError) throw uploadError;
+
+            // アップロードしたファイルの公開URLを取得
+            const { data } = supabase.storage.from('log-images').getPublicUrl(filePath);
+            imageUrl = data.publicUrl;
+        }
+
+        // STEP 2: messagesテーブルへ投稿データを挿入
+        const { error: dbError } = await supabase.from('messages').insert({
+            content: content,
+            box_id: currentBoxId,
+            sender: currentUser.display_name,
+            image_url: imageUrl // 画像がない場合は null が入る
+        });
+
+        if (dbError) throw dbError;
+
+        // 成功：モーダルを閉じて入力内容をリセット
+        postModal.classList.add('hidden');
+        resetForm();
+
+    } catch (err) {
+        // 失敗：エラー内容をアラートで表示
+        console.error('Transmission_Error:', err);
+        alert(`CRITICAL_ERROR: ${err.message}`);
+    } finally {
+        // UIロックを解除
+        modalTransmitBtn.innerText = 'Transmit_Data_Stream';
+        modalTransmitBtn.disabled = false;
+    }
+};
+
 async function loadMessages(boxId) {
     const feed = document.getElementById('feed');
     const { data } = await supabase

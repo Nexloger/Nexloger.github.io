@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nexloger | Log_Detail</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@400;900&display=swap');
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background: radial-gradient(circle at bottom left, #09090b, #020617); 
+            min-height: 100vh;
+        }
+        .mono { font-family: 'JetBrains Mono', monospace; }
+        .glass {
+            background: rgba(24, 24, 27, 0.6);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+    </style>
+</head>
+<body class="text-zinc-300 p-6 flex items-center justify-center">
+
+    <div id="post-container" class="w-full max-w-2xl glass rounded-[2.5rem] overflow-hidden shadow-2xl opacity-0 transition-opacity duration-700">
+        <div class="p-8 border-b border-white/5 flex justify-between items-center bg-white/2">
+            <div class="flex items-center gap-4">
+                <div class="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center border border-emerald-500/30">
+                    <span id="sender-initial" class="text-emerald-500 font-black text-xs">?</span>
+                </div>
+                <div>
+                    <h2 id="post-sender" class="text-white font-black uppercase tracking-tighter text-sm">Loading_User...</h2>
+                    <p id="post-date" class="text-[9px] text-zinc-500 mono">TIMESTAMP_PENDING</p>
+                </div>
+            </div>
+            <a href="index.html" class="mono text-[9px] text-zinc-500 hover:text-emerald-500 transition-colors border border-white/10 px-4 py-2 rounded-full uppercase tracking-widest">Return_to_Main</a>
+        </div>
+
+        <div class="p-10 space-y-8">
+            <p id="post-content" class="text-lg text-zinc-200 leading-relaxed italic">
+                アクセス中...
+            </p>
+            
+            <div id="post-image-wrapper" class="hidden rounded-3xl overflow-hidden border border-white/10 shadow-inner">
+                <img id="post-image" src="" alt="Log Attachment" class="w-full h-auto">
+            </div>
+        </div>
+
+        <div class="p-8 bg-black/40 flex justify-between items-center">
+            <div class="flex flex-col">
+                <span class="text-[8px] text-emerald-500 mono uppercase font-bold tracking-widest mb-1">Target_Sector</span>
+                <span id="post-sector" class="text-[10px] text-zinc-400 font-bold">---</span>
+            </div>
+            <div class="text-right">
+                <span class="text-[8px] text-zinc-600 mono uppercase tracking-widest block mb-1">Log_ID</span>
+                <span id="post-uuid" class="text-[8px] text-zinc-500 mono">---</span>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm'
+
+        const SUPABASE_URL = 'https://zphmbedascwcoddrserg.supabase.co'
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpwaG1iZWRhc2N3Y29kZHJzZXJnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcyNTQ3NTIsImV4cCI6MjA5MjgzMDc1Mn0.MnnGK-V4vRC8Y_ILWlUiLNkMppWDi53S9RBUpKR2amE'
+        const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
+
+        async function fetchPostDetail() {
+            // URLから id パラメータを取得
+            const params = new URLSearchParams(window.location.search);
+            const postId = params.get('id');
+
+            if (!postId) {
+                document.getElementById('post-content').innerText = "ERROR: No_ID_Specified";
+                return;
+            }
+
+            // DBから1件取得
+            const { data, error } = await supabase
+                .from('messages')
+                .select('*')
+                .eq('id', postId)
+                .single();
+
+            if (error || !data) {
+                document.getElementById('post-content').innerText = "ERROR: Log_Not_Found";
+                return;
+            }
+
+            // UIに反映
+            document.getElementById('post-sender').innerText = data.sender;
+            document.getElementById('sender-initial').innerText = data.sender.charAt(0).toUpperCase();
+            document.getElementById('post-date').innerText = new Date(data.created_at).toLocaleString();
+            document.getElementById('post-content').innerText = data.content;
+            document.getElementById('post-uuid').innerText = data.id;
+            
+            // 画像があれば表示
+            if (data.image_url) {
+                const img = document.getElementById('post-image');
+                img.src = data.image_url;
+                document.getElementById('post-image-wrapper').classList.remove('hidden');
+            }
+
+            // セクター名を表示（box_idがuuidなら名前を引く処理が必要ですが、一旦IDを表示）
+            document.getElementById('post-sector').innerText = data.box_id;
+
+            // 表示をフェードイン
+            document.getElementById('post-container').classList.remove('opacity-0');
+        }
+
+        fetchPostDetail();
+    </script>
+</body>
+</html>
