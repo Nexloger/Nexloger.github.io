@@ -80,26 +80,41 @@ async function loadMessages(boxId) {
 
 // セクター初期化
 async function init() {
-    const { data: boxes } = await supabase.from('boxes').select('*');
-    if (boxes && boxes.length > 0) {
-        const list = document.getElementById('box-list');
-        list.innerHTML = boxes.map(b => `
-            <li class="cursor-pointer p-3 text-[11px] hover:bg-white/5 rounded-xl transition-all mono uppercase tracking-widest text-zinc-500 hover:text-white" data-id="${b.id}">
-                # ${b.title}
-            </li>
-        `).join('');
+    try {
+        const { data: boxes, error } = await supabase.from('boxes').select('*');
         
-        currentBoxId = boxes[0].id;
-        document.getElementById('current-title').innerText = boxes[0].title;
-        loadMessages(currentBoxId);
-        
-        list.querySelectorAll('li').forEach(li => {
-            li.onclick = () => {
-                currentBoxId = li.dataset.id;
-                document.getElementById('current-title').innerText = li.innerText;
-                loadMessages(currentBoxId);
-            };
-        });
+        // 404やテーブルなしエラーのハンドリング
+        if (error) {
+            console.error("BOXES_FETCH_ERROR:", error.message);
+            const list = document.getElementById('box-list');
+            if (list) list.innerHTML = '<li class="text-red-500 text-[10px] p-3">ERROR: Table "boxes" not found.</li>';
+            return;
+        }
+
+        if (boxes && boxes.length > 0) {
+            const list = document.getElementById('box-list');
+            list.innerHTML = boxes.map(b => `
+                <li class="cursor-pointer p-3 text-[11px] hover:bg-white/5 rounded-xl transition-all mono uppercase tracking-widest text-zinc-500 hover:text-white" data-id="${b.id}">
+                    # ${b.title}
+                </li>
+            `).join('');
+            
+            // 最初のセクターを自動選択
+            currentBoxId = boxes[0].id;
+            document.getElementById('current-title').innerText = boxes[0].title;
+            loadMessages(currentBoxId);
+            
+            list.querySelectorAll('li').forEach(li => {
+                li.onclick = () => {
+                    currentBoxId = li.dataset.id;
+                    document.getElementById('current-title').innerText = li.innerText;
+                    loadMessages(currentBoxId);
+                };
+            });
+            console.log("SECTORS_INITIALIZED:", currentBoxId);
+        }
+    } catch (err) {
+        console.error("INIT_EXCEPTION:", err);
     }
 }
 
