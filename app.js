@@ -18,15 +18,16 @@ const modalSectorName = document.getElementById('modal-sector-name');
 const modalImageInput = document.getElementById('modal-image-input');
 const imagePreview = document.getElementById('image-preview');
 const fileStatus = document.getElementById('file-status');
+const feed = document.getElementById('feed');
+const boxList = document.getElementById('box-list');
 
 // --- 3. FUNCTIONS ---
 
-// ログインチェック
 async function checkAuth() {
     const token = localStorage.getItem('nex_token');
     if (!token) return;
 
-    const { data: session } = await supabase
+    const { data: session, error } = await supabase
         .from('nex_sessions')
         .select('*, nex_users(*)')
         .eq('token', token)
@@ -39,12 +40,14 @@ async function checkAuth() {
         document.getElementById('user-profile').classList.remove('hidden');
         document.getElementById('user-display').innerText = currentUser.display_name;
         console.log("AUTH_LOADED:", currentUser.display_name);
+    } else {
+        localStorage.removeItem('nex_token'); // 無効なトークンは削除
     }
 }
 
-// メッセージ読み込み
 async function loadMessages(boxId) {
-    const feed = document.getElementById('feed');
+    if (!boxId) return;
+    
     const { data, error } = await supabase
         .from('messages')
         .select('*')
@@ -52,7 +55,7 @@ async function loadMessages(boxId) {
         .order('created_at', { ascending: true });
 
     if (error) {
-        console.error("LOAD_ERROR:", error);
+        console.error("LOAD_ERROR:", error.message, error.details);
         return;
     }
 
@@ -61,7 +64,7 @@ async function loadMessages(boxId) {
             <article class="border-l-2 border-emerald-500/20 pl-4 py-3 hover:border-emerald-500/60 hover:bg-white/2 transition-all rounded-r-2xl">
                 <div class="flex justify-between items-start mb-2">
                     <div class="flex items-center gap-2">
-                        <span class="text-[10px] font-bold text-emerald-500 uppercase mono tracking-tighter">${msg.sender}</span>
+                        <span class="text-[10px] font-bold text-emerald-500 uppercase mono tracking-tighter">${msg.sender || 'ANONYMOUS'}</span>
                         <span class="text-[8px] text-zinc-600 mono">${new Date(msg.created_at).toLocaleTimeString()}</span>
                     </div>
                     <span class="text-[10px] text-zinc-700 group-hover:text-emerald-500 transition-colors mono">VIEW_LOG →</span>
@@ -78,43 +81,36 @@ async function loadMessages(boxId) {
     feed.scrollTop = feed.scrollHeight;
 }
 
-// セクター初期化
 async function init() {
     try {
-        const { data: boxes, error } = await supabase.from('boxes').select('*');
+        const { data: boxes, error } = await supabase.from('boxes').select('*').order('created_at', { ascending: true });
         
-        // 404やテーブルなしエラーのハンドリング
-        if (error) {
-            console.error("BOXES_FETCH_ERROR:", error.message);
-            const list = document.getElementById('box-list');
-            if (list) list.innerHTML = '<li class="text-red-500 text-[10px] p-3">ERROR: Table "boxes" not found.</li>';
-            return;
-        }
+        if (error) throw error;
 
         if (boxes && boxes.length > 0) {
-            const list = document.getElementById('box-list');
-            list.innerHTML = boxes.map(b => `
+            boxList.innerHTML = boxes.map(b => `
                 <li class="cursor-pointer p-3 text-[11px] hover:bg-white/5 rounded-xl transition-all mono uppercase tracking-widest text-zinc-500 hover:text-white" data-id="${b.id}">
                     # ${b.title}
                 </li>
             `).join('');
             
-            // 最初のセクターを自動選択
+            // 初回選択
             currentBoxId = boxes[0].id;
             document.getElementById('current-title').innerText = boxes[0].title;
             loadMessages(currentBoxId);
             
-            list.querySelectorAll('li').forEach(li => {
+            // クリックイベント
+            boxList.querySelectorAll('li').forEach(li => {
                 li.onclick = () => {
-                    currentBoxId = li.dataset.id;
-                    document.getElementById('current-title').innerText = li.innerText;
+                    currentBoxId = li.getAttribute('data-id');
+                    document.getElementById('current-title').innerText = li.innerText.replace('# ', '').trim();
                     loadMessages(currentBoxId);
+                    console.log("SECTOR_CHANGED:", currentBoxId);
                 };
             });
-            console.log("SECTORS_INITIALIZED:", currentBoxId);
         }
     } catch (err) {
-        console.error("INIT_EXCEPTION:", err);
+        console.error("INIT_ERROR:", err.message);
     }
 }
 
@@ -127,12 +123,10 @@ function resetForm() {
 
 // --- 4. EVENT LISTENERS ---
 
-// DOM読み込み完了時に実行
 document.addEventListener('DOMContentLoaded', async () => {
-    await checkAuth(); // 1. ログイン確認
-    await init();      // 2. データ初期化
+    await checkAuth();
+    await init();
 
-    // モーダルを開く
     if (openModalBtn) {
         openModalBtn.onclick = () => {
             if (!currentUser) {
@@ -144,7 +138,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         };
     }
 
-    // モーダルを閉じる
     if (closeModalBtn) {
         closeModalBtn.onclick = () => {
             postModal.classList.add('hidden');
@@ -152,7 +145,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         };
     }
 
-    // 画像プレビュー
     if (modalImageInput) {
         modalImageInput.onchange = (e) => {
             const file = e.target.files[0];
@@ -168,23 +160,22 @@ document.addEventListener('DOMContentLoaded', async () => {
         };
     }
 
-    // 送信処理
     if (modalTransmitBtn) {
         modalTransmitBtn.onclick = async () => {
             const content = modalContent.value.trim();
             const file = modalImageInput.files[0];
             
             if (!content || !currentBoxId || !currentUser) {
-                alert("SYSTEM_ERROR: 入力が不完全です。");
+                alert("SYSTEM_ERROR: 入力が不完全です。セクターを選択しているか確認してください。");
                 return;
             }
 
             modalTransmitBtn.innerText = 'TRANSMITTING...';
             modalTransmitBtn.disabled = true;
 
-            let imageUrl = null;
-
             try {
+                let imageUrl = null;
+
                 // A. 画像アップロード
                 if (file) {
                     const fileExt = file.name.split('.').pop();
@@ -195,7 +186,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         .from('log-images')
                         .upload(filePath, file);
 
-                    if (uploadError) throw uploadError;
+                    if (uploadError) throw new Error(`UPLOAD_FAILED: ${uploadError.message}`);
 
                     const { data } = supabase.storage.from('log-images').getPublicUrl(filePath);
                     imageUrl = data.publicUrl;
@@ -204,24 +195,20 @@ document.addEventListener('DOMContentLoaded', async () => {
                 // B. DB挿入
                 const { error: dbError } = await supabase.from('messages').insert({
                     content: content,
-                    box_id: currentBoxId,
+                    box_id: currentBoxId, // SQL側がText型ならUUID文字列としてそのまま届く
                     sender: currentUser.display_name,
                     image_url: imageUrl
                 });
 
-                if (dbError) {
-                    if (dbError.message.includes('RATE_LIMIT_EXCEEDED')) {
-                        throw new Error("連投制限です。1分待機してください。");
-                    }
-                    throw dbError;
-                }
+                if (dbError) throw dbError;
 
-                // C. 完了処理
+                // C. 成功
                 postModal.classList.add('hidden');
                 resetForm();
-                loadMessages(currentBoxId); // フィードを更新
+                await loadMessages(currentBoxId);
 
             } catch (err) {
+                console.error("TRANSMIT_ERROR:", err);
                 alert(`CRITICAL_ERROR: ${err.message}`);
             } finally {
                 modalTransmitBtn.innerText = 'Transmit_Data_Stream';
