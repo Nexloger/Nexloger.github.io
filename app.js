@@ -39,9 +39,8 @@ async function checkAuth() {
         document.getElementById('auth-nav').classList.add('hidden');
         document.getElementById('user-profile').classList.remove('hidden');
         document.getElementById('user-display').innerText = currentUser.display_name;
-        console.log("AUTH_LOADED:", currentUser.display_name);
     } else {
-        localStorage.removeItem('nex_token'); // 無効なトークンは削除
+        localStorage.removeItem('nex_token');
     }
 }
 
@@ -55,28 +54,23 @@ async function loadMessages(boxId) {
         .order('created_at', { ascending: true });
 
     if (error) {
-        console.error("LOAD_ERROR:", error.message, error.details);
+        console.error("LOAD_ERROR:", error.message);
         return;
     }
 
     feed.innerHTML = data.map(msg => `
-        <a href="posts.html?id=${msg.id}" class="block group">
-            <article class="border-l-2 border-emerald-500/20 pl-4 py-3 hover:border-emerald-500/60 hover:bg-white/2 transition-all rounded-r-2xl">
-                <div class="flex justify-between items-start mb-2">
-                    <div class="flex items-center gap-2">
-                        <span class="text-[10px] font-bold text-emerald-500 uppercase mono tracking-tighter">${msg.sender || 'ANONYMOUS'}</span>
-                        <span class="text-[8px] text-zinc-600 mono">${new Date(msg.created_at).toLocaleTimeString()}</span>
-                    </div>
-                    <span class="text-[10px] text-zinc-700 group-hover:text-emerald-500 transition-colors mono">VIEW_LOG →</span>
+        <article class="border-l-2 border-emerald-500/20 pl-4 py-3 mb-4 hover:border-emerald-500/60 hover:bg-white/5 transition-all rounded-r-2xl">
+            <div class="flex items-center gap-2 mb-2">
+                <span class="text-[10px] font-bold text-emerald-500 uppercase mono tracking-tighter">${msg.sender || 'ANONYMOUS'}</span>
+                <span class="text-[8px] text-zinc-600 mono">${new Date(msg.created_at).toLocaleTimeString()}</span>
+            </div>
+            <p class="text-sm text-zinc-300 leading-relaxed">${msg.content}</p>
+            ${msg.image_url ? `
+                <div class="mt-3 rounded-xl overflow-hidden border border-white/5 max-w-sm">
+                    <img src="${msg.image_url}" class="w-full h-auto object-cover opacity-90">
                 </div>
-                <p class="text-sm text-zinc-300 leading-relaxed">${msg.content}</p>
-                ${msg.image_url ? `
-                    <div class="mt-3 rounded-xl overflow-hidden border border-white/5 max-w-sm group-hover:border-emerald-500/30 transition-all">
-                        <img src="${msg.image_url}" class="w-full h-auto object-cover opacity-80 group-hover:opacity-100 transition-opacity">
-                    </div>
-                ` : ''}
-            </article>
-        </a>
+            ` : ''}
+        </article>
     `).join('');
     feed.scrollTop = feed.scrollHeight;
 }
@@ -84,7 +78,6 @@ async function loadMessages(boxId) {
 async function init() {
     try {
         const { data: boxes, error } = await supabase.from('boxes').select('*').order('created_at', { ascending: true });
-        
         if (error) throw error;
 
         if (boxes && boxes.length > 0) {
@@ -94,18 +87,15 @@ async function init() {
                 </li>
             `).join('');
             
-            // 初回選択
             currentBoxId = boxes[0].id;
             document.getElementById('current-title').innerText = boxes[0].title;
             loadMessages(currentBoxId);
             
-            // クリックイベント
             boxList.querySelectorAll('li').forEach(li => {
                 li.onclick = () => {
                     currentBoxId = li.getAttribute('data-id');
                     document.getElementById('current-title').innerText = li.innerText.replace('# ', '').trim();
                     loadMessages(currentBoxId);
-                    console.log("SECTOR_CHANGED:", currentBoxId);
                 };
             });
         }
@@ -165,10 +155,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const content = modalContent.value.trim();
             const file = modalImageInput.files[0];
             
-            if (!content || !currentBoxId || !currentUser) {
-                alert("SYSTEM_ERROR: 入力が不完全です。セクターを選択しているか確認してください。");
-                return;
-            }
+            if (!content || !currentBoxId || !currentUser) return;
 
             modalTransmitBtn.innerText = 'TRANSMITTING...';
             modalTransmitBtn.disabled = true;
@@ -176,40 +163,37 @@ document.addEventListener('DOMContentLoaded', async () => {
             try {
                 let imageUrl = null;
 
-                // A. 画像アップロード
                 if (file) {
-                    const fileExt = file.name.split('.').pop();
-                    const fileName = `${Math.random().toString(36).substring(2)}_${Date.now()}.${fileExt}`;
-                    const filePath = `public/${fileName}`;
+                    const fileName = `${Math.random().toString(36).substring(2)}_${Date.now()}.${file.name.split('.').pop()}`;
+                    // filePathから 'public/' を除外して、バケット直下に保存 (パス重複防止)
+                    const filePath = fileName; 
 
                     const { error: uploadError } = await supabase.storage
-                        .from('log-images')
+                        .from('public') // バケット名を'public'に修正
                         .upload(filePath, file);
 
-                    if (uploadError) throw new Error(`UPLOAD_FAILED: ${uploadError.message}`);
+                    if (uploadError) throw uploadError;
 
-                    const { data } = supabase.storage.from('log-images').getPublicUrl(filePath);
+                    const { data } = supabase.storage.from('public').getPublicUrl(filePath);
                     imageUrl = data.publicUrl;
                 }
 
-                // B. DB挿入
                 const { error: dbError } = await supabase.from('messages').insert({
                     content: content,
-                    box_id: currentBoxId, // SQL側がText型ならUUID文字列としてそのまま届く
+                    box_id: currentBoxId,
                     sender: currentUser.display_name,
                     image_url: imageUrl
                 });
 
                 if (dbError) throw dbError;
 
-                // C. 成功
                 postModal.classList.add('hidden');
                 resetForm();
                 await loadMessages(currentBoxId);
 
             } catch (err) {
                 console.error("TRANSMIT_ERROR:", err);
-                alert(`CRITICAL_ERROR: ${err.message}`);
+                alert(`ERROR: ${err.message}`);
             } finally {
                 modalTransmitBtn.innerText = 'Transmit_Data_Stream';
                 modalTransmitBtn.disabled = false;
