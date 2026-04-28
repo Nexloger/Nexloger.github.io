@@ -72,12 +72,6 @@
     </div>
 
     <script type="module">
-        import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm'
-        
-        const SUPABASE_URL = 'https://zphmbedascwcoddrserg.supabase.co'
-        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpwaG1iZWRhc2N3Y29kZHJzZXJnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcyNTQ3NTIsImV4cCI6MjA5MjgzMDc1Mn0.MnnGK-V4vRC8Y_ILWlUiLNkMppWDi53S9RBUpKR2amE'
-        const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
-
         document.getElementById('reg-submit').onclick = async () => {
             const email = document.getElementById('reg-email').value;
             const name = document.getElementById('reg-name').value;
@@ -89,21 +83,23 @@
                 return;
             }
 
-            msg.innerText = 'ESTABLISHING_CONNECTION...';
+            msg.innerText = 'PREPARING_IDENTITY_TOKEN...';
 
-            const { error } = await supabase.from('nex_users').insert({
+            // 1. データを一時保存 (まだDBには送らない)
+            const pendingData = {
                 email: email,
                 display_name: name,
-                password_hash: pass,
-                status: 'pending'
-            });
+                password: pass
+            };
+            sessionStorage.setItem('pending_node_data', JSON.stringify(pendingData));
 
-            if (!error) {
-                // 階層構造に合わせて verify.html へのパスを指定（同じフォルダ内の auth/verify.html）
+            // 2. 固定の認証コードをセット (テスト用: 123456)
+            sessionStorage.setItem('active_verify_token', '123456');
+
+            // 3. Verify画面へリダイレクト
+            setTimeout(() => {
                 window.location.href = `auth/verify.html?email=${encodeURIComponent(email)}`;
-            } else {
-                msg.innerText = 'REGISTRATION_ERROR: ' + error.message;
-            }
+            }, 800);
         };
     </script>
 </body>

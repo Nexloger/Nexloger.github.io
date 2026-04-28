@@ -23,7 +23,6 @@
             border: 1px solid rgba(255, 255, 255, 0.05);
         }
 
-        /* 認証待ちのパルスアニメーション */
         .pulse-border {
             animation: pulse-emerald 2s infinite;
         }
@@ -84,37 +83,63 @@
         const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpwaG1iZWRhc2N3Y29kZHJzZXJnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcyNTQ3NTIsImV4cCI6MjA5MjgzMDc1Mn0.MnnGK-V4vRC8Y_ILWlUiLNkMppWDi53S9RBUpKR2amE'
         const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
 
-        // URLからEmailを取得して表示
+        // URLパラメータからEmailを表示
         const params = new URLSearchParams(window.location.search);
         const email = params.get('email');
         if (email) document.getElementById('target-email').innerText = email;
 
         document.getElementById('verify-submit').onclick = async () => {
-            const code = document.getElementById('verify-code').value;
+            const inputCode = document.getElementById('verify-code').value;
             const msg = document.getElementById('verify-msg');
+            
+            // 1. sessionStorageから一時保存されたデータとコードを取得
+            const rawData = sessionStorage.getItem('pending_node_data');
+            const targetCode = sessionStorage.getItem('active_verify_token');
 
-            if (!code) {
-                msg.innerText = 'TOKEN_REQUIRED';
+            if (!rawData) {
+                msg.innerText = 'SESSION_EXPIRED: RESTART_SIGNUP';
                 return;
             }
 
-            msg.innerText = 'VERIFYING_CREDENTIALS...';
+            if (inputCode !== targetCode) {
+                msg.innerText = 'VERIFICATION_FAILED: INVALID_TOKEN';
+                return;
+            }
 
-            // 本来はAuth APIを使うが、既存の nex_users の status を更新する簡易ロジック
-            const { data, error } = await supabase
+            msg.innerText = 'CODE_ACCEPTED: DEPLOYING_IDENTITY...';
+
+            const userData = JSON.parse(rawData);
+
+            // 2. ここで初めてDBに本登録を実行
+            const { error } = await supabase
                 .from('nex_users')
-                .update({ status: 'active' })
-                .eq('email', email)
-                .select();
+                .insert([{
+                    email: userData.email,
+                    display_name: userData.display_name,
+                    password_hash: userData.password, // フロントでハッシュ化するのが望ましい
+                    status: 'active'
+                }]);
 
-            if (!error && data.length > 0) {
-                msg.innerText = 'ACCESS_GRANTED';
+            if (!error) {
+                msg.innerText = 'ACCESS_GRANTED: NODE_ACTIVATED';
+                
+                // メモリをクリア
+                sessionStorage.removeItem('pending_node_data');
+                sessionStorage.removeItem('active_verify_token');
+
                 setTimeout(() => {
                     window.location.href = '../login.html';
                 }, 1500);
             } else {
-                msg.innerText = 'VERIFICATION_FAILED: INVALID_TOKEN';
+                msg.innerText = 'DEPLOYMENT_ERROR: ' + error.message;
             }
+        };
+
+        // 再送ボタン（一応ダミー機能）
+        document.getElementById('resend-btn').onclick = () => {
+            const msg = document.getElementById('verify-msg');
+            msg.innerText = 'SIGNAL_RESENT: CHECK_INBOX_OR_CONSOLE';
+            console.log("Current Verification Code:", sessionStorage.getItem('active_verify_token'));
         };
     </script>
 </body>
