@@ -27,7 +27,7 @@ async function checkAuth() {
     const token = localStorage.getItem('nex_token');
     if (!token) return;
 
-    const { data: session, error } = await supabase
+    const { data: session } = await supabase
         .from('nex_sessions')
         .select('*, nex_users(*)')
         .eq('token', token)
@@ -46,19 +46,13 @@ async function checkAuth() {
 
 async function loadMessages(boxId) {
     if (!boxId) return;
-    
-    const { data, error } = await supabase
-        .from('messages')
-        .select('*')
-        .eq('box_id', boxId)
-        .order('created_at', { ascending: true });
-
-    if (error) return;
+    const { data } = await supabase.from('messages').select('*').eq('box_id', boxId).order('created_at', { ascending: true });
+    if (!data) return;
 
     feed.innerHTML = data.map(msg => `
-        <article class="border-l-2 border-emerald-500/20 pl-4 py-3 mb-4 hover:border-emerald-500/60 hover:bg-white/5 transition-all rounded-r-2xl">
+        <article class="border-l-2 border-emerald-500/20 pl-4 py-3 mb-4 bg-white/5 rounded-r-2xl">
             <div class="flex items-center gap-2 mb-2">
-                <span class="text-[10px] font-bold text-emerald-500 uppercase mono tracking-tighter">${msg.sender || 'ANONYMOUS'}</span>
+                <span class="text-[10px] font-bold text-emerald-500 uppercase mono">${msg.sender || 'ANONYMOUS'}</span>
                 <span class="text-[8px] text-zinc-600 mono">${new Date(msg.created_at).toLocaleTimeString()}</span>
             </div>
             <p class="text-sm text-zinc-300 leading-relaxed">${msg.content}</p>
@@ -73,128 +67,62 @@ async function loadMessages(boxId) {
 }
 
 async function init() {
-    try {
-        const { data: boxes, error } = await supabase.from('boxes').select('*').order('created_at', { ascending: true });
-        if (error) throw error;
-
-        if (boxes && boxes.length > 0) {
-            boxList.innerHTML = boxes.map(b => `
-                <li class="cursor-pointer p-3 text-[11px] hover:bg-white/5 rounded-xl transition-all mono uppercase tracking-widest text-zinc-500 hover:text-white" data-id="${b.id}">
-                    # ${b.title}
-                </li>
-            `).join('');
-            
-            currentBoxId = boxes[0].id;
-            document.getElementById('current-title').innerText = boxes[0].title;
-            loadMessages(currentBoxId);
-            
-            boxList.querySelectorAll('li').forEach(li => {
-                li.onclick = () => {
-                    currentBoxId = li.getAttribute('data-id');
-                    document.getElementById('current-title').innerText = li.innerText.replace('# ', '').trim();
-                    loadMessages(currentBoxId);
-                };
-            });
-        }
-    } catch (err) {
-        console.error("INIT_ERROR:", err.message);
+    const { data: boxes } = await supabase.from('boxes').select('*').order('created_at', { ascending: true });
+    if (boxes && boxes.length > 0) {
+        boxList.innerHTML = boxes.map(b => `<li class="cursor-pointer p-3 text-[11px] hover:bg-white/5 rounded-xl transition-all mono uppercase tracking-widest text-zinc-500 hover:text-white" data-id="${b.id}"># ${b.title}</li>`).join('');
+        currentBoxId = boxes[0].id;
+        document.getElementById('current-title').innerText = boxes[0].title;
+        loadMessages(currentBoxId);
+        boxList.querySelectorAll('li').forEach(li => {
+            li.onclick = () => {
+                currentBoxId = li.getAttribute('data-id');
+                document.getElementById('current-title').innerText = li.innerText.replace('# ', '').trim();
+                loadMessages(currentBoxId);
+            };
+        });
     }
-}
-
-function resetForm() {
-    modalContent.value = '';
-    modalImageInput.value = '';
-    imagePreview.classList.add('hidden');
-    fileStatus.innerText = 'Attach_Media_Payload';
 }
 
 // --- 4. EVENT LISTENERS ---
 
-document.addEventListener('DOMContentLoaded', async () => {
-    await checkAuth();
-    await init();
+document.addEventListener('DOMContentLoaded', () => { checkAuth(); init(); });
 
-    if (openModalBtn) {
-        openModalBtn.onclick = () => {
-            if (!currentUser) {
-                document.getElementById('auth-overlay').classList.remove('hidden');
-                return;
-            }
-            modalSectorName.innerText = document.getElementById('current-title').innerText;
-            postModal.classList.remove('hidden');
-        };
+if (openModalBtn) openModalBtn.onclick = () => {
+    if (!currentUser) { document.getElementById('auth-overlay').classList.remove('hidden'); return; }
+    postModal.classList.remove('hidden');
+};
+
+if (closeModalBtn) closeModalBtn.onclick = () => postModal.classList.add('hidden');
+
+modalTransmitBtn.onclick = async () => {
+    const content = modalContent.value.trim();
+    const file = modalImageInput.files[0];
+    if (!content || !currentBoxId || !currentUser) return;
+
+    modalTransmitBtn.innerText = 'TRANSMITTING...';
+    try {
+        let imageUrl = null;
+        if (file) {
+            const fileName = `${Date.now()}_${file.name}`;
+            // バケット名 'public' を指定
+            const { error: uploadError } = await supabase.storage.from('public').upload(fileName, file);
+            if (uploadError) throw uploadError;
+
+            const { data } = supabase.storage.from('public').getPublicUrl(fileName);
+            imageUrl = data.publicUrl;
+        }
+
+        const { error: dbError } = await supabase.from('messages').insert({
+            content, box_id: currentBoxId, sender: currentUser.display_name, image_url: imageUrl
+        });
+        if (dbError) throw dbError;
+
+        postModal.classList.add('hidden');
+        modalContent.value = '';
+        loadMessages(currentBoxId);
+    } catch (err) {
+        alert("ERROR: " + err.message);
+    } finally {
+        modalTransmitBtn.innerText = 'Transmit_Data_Stream';
     }
-
-    if (closeModalBtn) {
-        closeModalBtn.onclick = () => {
-            postModal.classList.add('hidden');
-            resetForm();
-        };
-    }
-
-    if (modalImageInput) {
-        modalImageInput.onchange = (e) => {
-            const file = e.target.files[0];
-            if (file) {
-                fileStatus.innerText = `READY: ${file.name}`;
-                const reader = new FileReader();
-                reader.onload = (re) => {
-                    imagePreview.querySelector('img').src = re.target.result;
-                    imagePreview.classList.remove('hidden');
-                };
-                reader.readAsDataURL(file);
-            }
-        };
-    }
-
-    if (modalTransmitBtn) {
-        modalTransmitBtn.onclick = async () => {
-            const content = modalContent.value.trim();
-            const file = modalImageInput.files[0];
-            
-            if (!content || !currentBoxId || !currentUser) return;
-
-            modalTransmitBtn.innerText = 'TRANSMITTING...';
-            modalTransmitBtn.disabled = true;
-
-            try {
-                let imageUrl = null;
-
-                if (file) {
-                    const fileName = `${Math.random().toString(36).substring(2)}_${Date.now()}.${file.name.split('.').pop()}`;
-                    // 重要: public/ をパスに含めず、バケット直下に保存する
-                    const filePath = fileName; 
-
-                    const { error: uploadError } = await supabase.storage
-                        .from('public') // バケット名を修正
-                        .upload(filePath, file);
-
-                    if (uploadError) throw uploadError;
-
-                    const { data } = supabase.storage.from('public').getPublicUrl(filePath);
-                    imageUrl = data.publicUrl;
-                }
-
-                const { error: dbError } = await supabase.from('messages').insert({
-                    content: content,
-                    box_id: currentBoxId,
-                    sender: currentUser.display_name,
-                    image_url: imageUrl
-                });
-
-                if (dbError) throw dbError;
-
-                postModal.classList.add('hidden');
-                resetForm();
-                await loadMessages(currentBoxId);
-
-            } catch (err) {
-                console.error("TRANSMIT_ERROR:", err);
-                alert(`ERROR: ${err.message}`);
-            } finally {
-                modalTransmitBtn.innerText = 'Transmit_Data_Stream';
-                modalTransmitBtn.disabled = false;
-            }
-        };
-    }
-});
+};
