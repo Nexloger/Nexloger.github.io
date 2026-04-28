@@ -86,6 +86,7 @@
 
             msg.innerText = 'AUTHENTICATING...';
 
+            // 1. ユーザーを検索（メールとパスワードの両方が一致するもの）
             const { data: user, error } = await supabase
                 .from('nex_users')
                 .select('*')
@@ -94,24 +95,25 @@
                 .maybeSingle();
 
             if (user) {
-                if (user.status === 'pending') {
-                    window.location.href = `auth/verify.html?email=${encodeURIComponent(email)}`;
-                    return;
-                }
-
-                // セッション生成 (簡易版)
+                // 2. セッション生成 (24時間有効なUUIDトークン)
                 const token = crypto.randomUUID();
                 const expires = new Date();
                 expires.setHours(expires.getHours() + 24);
 
-                await supabase.from('nex_sessions').insert({
+                // 3. DBのセッションテーブルに保存
+                const { error: sessionError } = await supabase.from('nex_sessions').insert({
                     user_id: user.id,
                     token: token,
                     expires_at: expires.toISOString()
                 });
 
-                localStorage.setItem('nex_token', token);
-                window.location.href = '../index.html';
+                if (!sessionError) {
+                    // ブラウザにトークンを保存してメイン画面へ
+                    localStorage.setItem('nex_token', token);
+                    window.location.href = '../index.html';
+                } else {
+                    msg.innerText = 'SESSION_ERROR: ' + sessionError.message;
+                }
             } else {
                 msg.innerText = 'ACCESS_DENIED: INVALID_CREDENTIALS';
             }
