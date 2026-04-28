@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nexloger | Terminal Access</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@400;900&display=swap');
+        
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background: radial-gradient(circle at top left, #020617, #09090b); 
+            height: 100vh;
+        }
+
+        .mono { font-family: 'JetBrains Mono', monospace; }
+
+        .glass {
+            background: rgba(24, 24, 27, 0.4);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        input:focus {
+            box-shadow: 0 0 15px rgba(16, 185, 129, 0.1);
+        }
+
+        .auth-animate { animation: fadeIn 0.6s cubic-bezier(0.22, 1, 0.36, 1); }
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+    </style>
+</head>
+<body class="text-zinc-400 flex items-center justify-center p-6">
+
+    <div class="w-full max-w-md glass p-12 rounded-[2.5rem] space-y-10 shadow-2xl auth-animate">
+        
+        <div class="space-y-3 text-center">
+            <div class="inline-block px-3 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded-full text-[9px] text-emerald-500 mono font-bold uppercase tracking-[0.3em] mb-2">
+                Authentication_Gate
+            </div>
+            <h2 class="text-white font-black tracking-tighter text-3xl italic uppercase">Connect_Terminal</h2>
+            <p class="text-[10px] text-zinc-500 uppercase tracking-widest leading-loose mono">Verify your credentials to establish a secure link</p>
+        </div>
+
+        <div class="space-y-5">
+            <div class="group">
+                <label class="text-[9px] text-zinc-600 uppercase font-bold ml-2 mono group-focus-within:text-emerald-500 transition-colors">Credential_ID (Email)</label>
+                <input id="login-email" type="email" placeholder="user@terminal.net" class="w-full bg-black/40 border border-white/5 rounded-2xl p-4 text-sm text-zinc-200 outline-none focus:border-emerald-500/40 transition-all mt-1">
+            </div>
+
+            <div class="group">
+                <label class="text-[9px] text-zinc-600 uppercase font-bold ml-2 mono group-focus-within:text-emerald-500 transition-colors">Access_Code (Password)</label>
+                <input id="login-pass" type="password" placeholder="••••••••" class="w-full bg-black/40 border border-white/5 rounded-2xl p-4 text-sm text-zinc-200 outline-none focus:border-emerald-500/40 transition-all mt-1">
+            </div>
+
+            <button id="login-submit" class="w-full bg-emerald-600 text-white py-5 rounded-2xl text-[11px] font-black hover:bg-emerald-500 transition-all uppercase tracking-[0.2em] mt-6 shadow-lg shadow-emerald-900/40 active:scale-[0.98]">
+                Establish_Link
+            </button>
+        </div>
+
+        <div class="text-center pt-4 border-t border-white/5 flex flex-col gap-3">
+            <a href="signup.html" class="text-[10px] text-zinc-500 hover:text-white uppercase tracking-widest transition-colors mono">No Identity? <span class="text-emerald-500 font-bold underline underline-offset-4 decoration-emerald-500/30">Initialize_New</span></a>
+            <a href="../index.html" class="text-[9px] text-zinc-700 hover:text-zinc-500 uppercase tracking-tighter transition-colors mono">Return_to_Guest_Mode</a>
+        </div>
+        
+        <div id="login-msg" class="text-[9px] text-center text-rose-500 uppercase h-2 font-bold mono"></div>
+    </div>
+
+    <script type="module">
+        import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm'
+        
+        const SUPABASE_URL = 'https://zphmbedascwcoddrserg.supabase.co'
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpwaG1iZWRhc2N3Y29kZHJzZXJnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcyNTQ3NTIsImV4cCI6MjA5MjgzMDc1Mn0.MnnGK-V4vRC8Y_ILWlUiLNkMppWDi53S9RBUpKR2amE'
+        const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
+
+        document.getElementById('login-submit').onclick = async () => {
+            const email = document.getElementById('login-email').value;
+            const pass = document.getElementById('login-pass').value;
+            const msg = document.getElementById('login-msg');
+
+            if (!email || !pass) {
+                msg.innerText = 'CREDENTIALS_REQUIRED';
+                return;
+            }
+
+            msg.innerText = 'AUTHENTICATING...';
+
+            const { data: user, error } = await supabase
+                .from('nex_users')
+                .select('*')
+                .eq('email', email)
+                .eq('password_hash', pass)
+                .maybeSingle();
+
+            if (user) {
+                if (user.status === 'pending') {
+                    window.location.href = `auth/verify.html?email=${encodeURIComponent(email)}`;
+                    return;
+                }
+
+                // セッション生成 (簡易版)
+                const token = crypto.randomUUID();
+                const expires = new Date();
+                expires.setHours(expires.getHours() + 24);
+
+                await supabase.from('nex_sessions').insert({
+                    user_id: user.id,
+                    token: token,
+                    expires_at: expires.toISOString()
+                });
+
+                localStorage.setItem('nex_token', token);
+                window.location.href = '../index.html';
+            } else {
+                msg.innerText = 'ACCESS_DENIED: INVALID_CREDENTIALS';
+            }
+        };
+    </script>
+</body>
+</html>

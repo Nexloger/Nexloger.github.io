@@ -6,82 +6,103 @@
     <title>Nexloger | Digital Pulse</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
-        body { font-family: 'JetBrains Mono', monospace; background-color: #050505; }
-        .custom-scroll::-webkit-scrollbar { width: 4px; }
-        .custom-scroll::-webkit-scrollbar-thumb { background: #18181b; }
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@400;900&display=swap');
         
-        /* ログイン画面のフェードイン用 */
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background: radial-gradient(circle at top right, #09090b, #020617); 
+            height: 100vh;
+        }
+
+        .mono { font-family: 'JetBrains Mono', monospace; }
+
+        /* ガラス質感の共通クラス */
+        .glass {
+            background: rgba(24, 24, 27, 0.4);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-color: rgba(63, 63, 70, 0.3);
+        }
+
+        .custom-scroll::-webkit-scrollbar { width: 4px; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: rgba(161, 161, 170, 0.2); border-radius: 10px; }
+        
         .auth-animate { animation: fadeIn 0.5s ease-out; }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.98); } to { opacity: 1; transform: scale(1); } }
     </style>
 </head>
-<body class="text-zinc-400 h-screen flex flex-col overflow-hidden">
+<body class="text-zinc-300 flex flex-col overflow-hidden">
 
-    <header class="h-14 border-b border-zinc-900 flex items-center px-6 justify-between shrink-0 bg-[#050505]/80 backdrop-blur-sm z-40">
-        <div class="flex items-center gap-4">
-            <h1 class="text-white font-bold tracking-tighter text-lg">NEXLOGER</h1>
-            <div id="status" class="text-[9px] py-0.5 px-2 border border-zinc-800 rounded text-zinc-600 uppercase tracking-widest">
-                Standby
+    <header class="h-16 border-b border-white/5 flex items-center px-8 justify-between shrink-0 glass z-40">
+        <div class="flex items-center gap-6">
+            <h1 class="text-white font-black tracking-tighter text-xl italic uppercase group cursor-default">
+                NEX<span class="text-emerald-500 group-hover:text-emerald-400 transition-colors">LOGER</span>
+            </h1>
+            <div id="status" class="mono text-[9px] py-1 px-3 bg-emerald-500/10 border border-emerald-500/20 rounded-full text-emerald-500 uppercase tracking-widest font-bold">
+                Online_Pulse
             </div>
         </div>
 
-        <div class="flex items-center gap-6">
-            <nav id="auth-nav" class="flex gap-4 text-[10px] font-bold uppercase tracking-widest">
-                <a href="login.html" class="text-zinc-500 hover:text-white transition">Login</a>
-                <a href="signup.html" class="text-zinc-500 hover:text-white transition border-l border-zinc-800 pl-4">Signup</a>
+        <div class="flex items-center gap-8">
+            <nav id="auth-nav" class="mono flex gap-6 text-[10px] font-bold uppercase tracking-widest">
+                <a href="login.html" class="text-zinc-400 hover:text-white transition-all">Connect</a>
+                <a href="signup.html" class="text-emerald-500 hover:text-emerald-400 transition-all border border-emerald-500/30 px-3 py-1 rounded">Initialize_ID</a>
             </nav>
-            <div id="user-profile" class="hidden flex items-center gap-3">
-                <span id="user-display" class="text-[10px] font-bold text-zinc-500 uppercase"></span>
-                <button id="logout-btn" class="text-[9px] text-zinc-700 hover:text-red-900 transition uppercase underline decoration-zinc-800">Logout</button>
+            <div id="user-profile" class="hidden flex items-center gap-4">
+                <div class="flex flex-col items-end">
+                    <span id="user-display" class="text-[10px] font-bold text-zinc-100 uppercase tracking-tighter"></span>
+                    <span class="text-[8px] text-zinc-500 mono">AUTHORIZED_USER</span>
+                </div>
+                <button id="logout-btn" class="text-[9px] text-zinc-500 hover:text-red-400 transition-all uppercase underline decoration-zinc-800">Disconnect</button>
             </div>
         </div>
     </header>
 
     <main class="flex-1 flex overflow-hidden">
-        <aside class="w-48 border-r border-zinc-900 overflow-y-auto custom-scroll hidden md:block bg-[#080808]">
-            <div class="p-4 text-[10px] text-zinc-600 uppercase tracking-[0.2em] font-bold">Active_Boxes</div>
-            <ul id="box-list" class="px-2 space-y-1">
+        <aside class="w-60 border-r border-white/5 overflow-y-auto custom-scroll hidden md:block bg-zinc-950/20">
+            <div class="p-6 text-[10px] text-zinc-500 uppercase tracking-[0.3em] font-black opacity-50">Data_Sectors</div>
+            <ul id="box-list" class="px-4 space-y-2">
                 </ul>
         </aside>
 
-        <section class="flex-1 flex flex-col min-w-0 bg-[#070707]">
-            <header class="p-4 border-b border-zinc-900/50 flex justify-between items-center">
-                <span id="current-title" class="text-xs text-zinc-200 font-bold uppercase tracking-widest">Select a Box</span>
+        <section class="flex-1 flex flex-col min-w-0 bg-zinc-950/10">
+            <header class="p-5 border-b border-white/5 flex justify-between items-center bg-white/2">
+                <div class="flex items-center gap-3">
+                    <div class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                    <span id="current-title" class="text-xs text-white font-black uppercase tracking-widest mono">Select_Sector</span>
+                </div>
             </header>
             
-            <div id="feed" class="flex-1 overflow-y-auto p-6 space-y-4 custom-scroll">
+            <div id="feed" class="flex-1 overflow-y-auto p-8 space-y-6 custom-scroll">
                 </div>
 
-            <footer class="p-4 border-t border-zinc-900 bg-[#050505]">
-                <div class="max-w-3xl mx-auto flex gap-3">
+            <footer class="p-6">
+                <div class="max-w-4xl mx-auto glass rounded-2xl p-2 border border-white/10 flex gap-2 shadow-2xl">
                     <textarea 
                         id="message-input" 
                         rows="1" 
-                        class="flex-1 bg-zinc-900/40 border border-zinc-800 rounded px-4 py-2.5 text-sm text-zinc-200 focus:outline-none focus:border-zinc-500 transition-all resize-none"
-                        placeholder="Push your log..."
+                        class="flex-1 bg-transparent px-4 py-3 text-sm text-zinc-100 focus:outline-none transition-all resize-none placeholder-zinc-600"
+                        placeholder="Type your secure log here..."
                     ></textarea>
-                    <button id="send-btn" class="bg-zinc-200 text-black px-5 py-1 text-xs font-black hover:bg-white transition uppercase tracking-tighter shadow-lg shadow-white/5">Push</button>
+                    <button id="send-btn" class="bg-emerald-600 text-white px-8 py-3 rounded-xl text-xs font-black hover:bg-emerald-500 transition-all uppercase tracking-tighter shadow-lg shadow-emerald-900/40">Transmit</button>
                 </div>
             </footer>
         </section>
     </main>
 
-    <div id="auth-overlay" class="fixed inset-0 z-50 bg-[#050505] flex items-center justify-center p-6 hidden auth-animate">
-        <div class="w-full max-w-sm border border-zinc-900 bg-[#080808] p-10 space-y-8 relative text-center">
-            <div class="space-y-2">
-                <h2 class="text-white font-bold tracking-tighter text-2xl italic uppercase">Access_Required</h2>
-                <div class="h-px w-12 bg-zinc-800 mx-auto"></div>
-                <p class="text-[9px] text-zinc-600 uppercase tracking-widest leading-loose">Credential verification needed to access terminal</p>
+    <div id="auth-overlay" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-md flex items-center justify-center p-6 hidden auth-animate">
+        <div class="w-full max-w-md glass p-12 rounded-3xl border border-white/10 text-center shadow-2xl">
+            <div class="mb-10">
+                <div class="w-16 h-16 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                    <div class="w-8 h-8 border-2 border-emerald-500 rounded-lg animate-spin-slow"></div>
+                </div>
+                <h2 class="text-white font-black tracking-tighter text-3xl italic uppercase mb-2">Security_Gate</h2>
+                <p class="mono text-[10px] text-zinc-500 uppercase tracking-widest">Authentication required for core access</p>
             </div>
 
             <div class="flex flex-col gap-4">
-                <a href="login.html" class="w-full bg-zinc-200 text-black py-4 text-[10px] font-black hover:bg-white transition-all uppercase tracking-[0.2em]">Go_to_Login</a>
-                <a href="signup.html" class="w-full border border-zinc-800 text-zinc-500 py-4 text-[10px] font-black hover:bg-zinc-900 hover:text-white transition-all uppercase tracking-[0.2em]">Register_New_ID</a>
-            </div>
-
-            <div class="pt-4 border-t border-zinc-900/50">
-                <p class="text-[8px] text-zinc-800 uppercase tracking-tighter italic">NEX_CORE_SECURITY_PROTOCOL_v4.2</p>
+                <a href="login.html" class="w-full bg-white text-black py-4 rounded-xl text-xs font-black hover:bg-emerald-400 transition-all uppercase tracking-[0.2em]">Connect_Terminal</a>
+                <a href="signup.html" class="w-full border border-white/10 text-zinc-400 py-4 rounded-xl text-[10px] font-black hover:bg-white/5 hover:text-white transition-all uppercase tracking-[0.2em]">Create_Access_Key</a>
             </div>
         </div>
     </div>
