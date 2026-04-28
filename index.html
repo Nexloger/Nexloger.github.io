@@ -45,8 +45,8 @@
 
         <div class="flex items-center gap-8">
             <nav id="auth-nav" class="mono flex gap-6 text-[10px] font-bold uppercase tracking-widest">
-                <a href="login.html" class="text-zinc-400 hover:text-white transition-all">Connect</a>
-                <a href="signup.html" class="text-emerald-500 hover:text-emerald-400 transition-all border border-emerald-500/30 px-3 py-1 rounded">Initialize_ID</a>
+                <a href="accounts/login.html" class="text-zinc-400 hover:text-white transition-all">Connect</a>
+                <a href="accounts/signup.html" class="text-emerald-500 hover:text-emerald-400 transition-all border border-emerald-500/30 px-3 py-1 rounded">Initialize_ID</a>
             </nav>
             <div id="user-profile" class="hidden flex items-center gap-4">
                 <div class="flex flex-col items-end">
@@ -106,6 +106,34 @@
             </div>
         </div>
     </div>
+
+    <button id="open-post-modal" class="fixed bottom-8 right-8 w-14 h-14 bg-emerald-600 text-white rounded-2xl shadow-2xl flex items-center justify-center hover:bg-emerald-500 transition-all active:scale-95 z-50 group">
+    <span class="text-2xl group-hover:rotate-90 transition-transform">+</span>
+</button>
+
+<div id="post-modal" class="fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-6 hidden">
+    <div class="w-full max-w-xl glass p-8 rounded-[2rem] border border-white/10 space-y-6">
+        <div class="flex justify-between items-center">
+            <h3 class="text-white font-black italic uppercase tracking-tighter mono text-lg">Create_New_Log</h3>
+            <button id="close-post-modal" class="text-zinc-500 hover:text-white mono text-xs">ESC_CLOSE</button>
+        </div>
+        
+        <div class="space-y-4">
+            <div class="bg-black/20 p-4 rounded-xl border border-white/5">
+                <span class="text-[9px] text-emerald-500 mono font-bold block mb-2 uppercase">Target_Sector</span>
+                <span id="modal-sector-name" class="text-sm text-zinc-100 font-bold">---</span>
+            </div>
+            
+            <textarea id="modal-content" rows="6" 
+                class="w-full bg-black/40 border border-white/5 rounded-2xl p-6 text-zinc-100 text-sm outline-none focus:border-emerald-500/40 transition-all resize-none placeholder-zinc-700"
+                placeholder="ログを入力してください..."></textarea>
+        </div>
+
+        <button id="modal-transmit-btn" class="w-full bg-emerald-600 text-white py-4 rounded-xl text-[11px] font-black hover:bg-emerald-500 transition-all uppercase tracking-[0.2em] shadow-lg shadow-emerald-900/40">
+            Transmit_Log
+        </button>
+    </div>
+</div>
 
     <script type="module" src="app.js"></script>
 </body>
