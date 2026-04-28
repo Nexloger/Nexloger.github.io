@@ -53,10 +53,7 @@ async function loadMessages(boxId) {
         .eq('box_id', boxId)
         .order('created_at', { ascending: true });
 
-    if (error) {
-        console.error("LOAD_ERROR:", error.message);
-        return;
-    }
+    if (error) return;
 
     feed.innerHTML = data.map(msg => `
         <article class="border-l-2 border-emerald-500/20 pl-4 py-3 mb-4 hover:border-emerald-500/60 hover:bg-white/5 transition-all rounded-r-2xl">
@@ -165,11 +162,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 if (file) {
                     const fileName = `${Math.random().toString(36).substring(2)}_${Date.now()}.${file.name.split('.').pop()}`;
-                    // filePathから 'public/' を除外して、バケット直下に保存 (パス重複防止)
+                    // 重要: public/ をパスに含めず、バケット直下に保存する
                     const filePath = fileName; 
 
                     const { error: uploadError } = await supabase.storage
-                        .from('public') // バケット名を'public'に修正
+                        .from('public') // バケット名を修正
                         .upload(filePath, file);
 
                     if (uploadError) throw uploadError;
