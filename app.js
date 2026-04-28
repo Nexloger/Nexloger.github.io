@@ -8,22 +8,117 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
 let currentBoxId = null
 let currentUser = null 
 
-// --- 2. AUTH LOGIC ---
+// --- 2. ELEMENTS ---
+const postModal = document.getElementById('post-modal');
+const openModalBtn = document.getElementById('open-post-modal');
+const closeModalBtn = document.getElementById('close-post-modal');
+const modalTransmitBtn = document.getElementById('modal-transmit-btn');
+const modalContent = document.getElementById('modal-content');
+const modalSectorName = document.getElementById('modal-sector-name');
+const modalImageInput = document.getElementById('modal-image-input');
+const imagePreview = document.getElementById('image-preview');
+const fileStatus = document.getElementById('file-status');
 
-async function checkAuthAndInit() {
-    const token = localStorage.getItem('nex_token');
-    const authNav = document.getElementById('auth-nav');
-    const userProfile = document.getElementById('user-profile');
-    const userDisplay = document.getElementById('user-display');
-    const statusTag = document.getElementById('status');
+// --- 3. MODAL LOGIC ---
 
-    if (!token) {
-        setupGuestUI();
+// モーダルを開く
+openModalBtn.onclick = () => {
+    if (!currentUser) {
+        document.getElementById('auth-overlay').classList.remove('hidden');
         return;
     }
+    modalSectorName.innerText = document.getElementById('current-title').innerText;
+    postModal.classList.remove('hidden');
+};
 
-    // セッションをDBで照合（ユーザー情報も一緒に取得）
-    const { data: session, error } = await supabase
+// モーダルを閉じる
+closeModalBtn.onclick = () => {
+    postModal.classList.add('hidden');
+    resetForm();
+};
+
+// プレビュー表示
+modalImageInput.onchange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+        fileStatus.innerText = `READY: ${file.name}`;
+        const reader = new FileReader();
+        reader.onload = (re) => {
+            imagePreview.querySelector('img').src = re.target.result;
+            imagePreview.classList.remove('hidden');
+        };
+        reader.readAsDataURL(file);
+    }
+};
+
+function resetForm() {
+    modalContent.value = '';
+    modalImageInput.value = '';
+    imagePreview.classList.add('hidden');
+    fileStatus.innerText = 'Attach_Media_Payload';
+}
+
+// --- 4. CORE TRANSMISSION (送信処理) ---
+
+modalTransmitBtn.onclick = async () => {
+    const content = modalContent.value.trim();
+    const file = modalImageInput.files[0];
+    
+    if (!content || !currentBoxId || !currentUser) return;
+
+    modalTransmitBtn.innerText = 'TRANSMITTING...';
+    modalTransmitBtn.disabled = true;
+
+    let imageUrl = null;
+
+    try {
+        // A. 画像がある場合はStorageにアップ
+        if (file) {
+            const fileExt = file.name.split('.').pop();
+            const fileName = `${Math.random()}_${Date.now()}.${fileExt}`;
+            const filePath = `public/${fileName}`;
+
+            const { error: uploadError } = await supabase.storage
+                .from('log-images') // 作成したバケット名
+                .upload(filePath, file);
+
+            if (uploadError) throw uploadError;
+
+            // 公開URLの取得
+            const { data } = supabase.storage.from('log-images').getPublicUrl(filePath);
+            imageUrl = data.publicUrl;
+        }
+
+        // B. DBにメッセージを登録
+        const { error: dbError } = await supabase.from('messages').insert({
+            content: content,
+            box_id: currentBoxId,
+            sender: currentUser.display_name,
+            image_url: imageUrl
+        });
+
+        if (dbError) throw dbError;
+
+        // 成功時
+        postModal.classList.add('hidden');
+        resetForm();
+
+    } catch (err) {
+        console.error('Transmission_Error:', err);
+        alert(`CRITICAL_ERROR: ${err.message}`);
+    } finally {
+        modalTransmitBtn.innerText = 'Transmit_Data_Stream';
+        modalTransmitBtn.disabled = false;
+    }
+};
+
+// --- 5. INITIALIZATION & AUTH (既存のものを統合) ---
+
+async function checkAuth() {
+    const token = localStorage.getItem('nex_token');
+    if (!token) return;
+
+    const { data: session } = await supabase
         .from('nex_sessions')
         .select('*, nex_users(*)')
         .eq('token', token)
@@ -31,208 +126,64 @@ async function checkAuthAndInit() {
         .maybeSingle();
 
     if (session && session.nex_users) {
-        // 認証成功
         currentUser = session.nex_users;
-        
-        if (authNav) authNav.classList.add('hidden');
-        if (userProfile) userProfile.classList.remove('hidden');
-        if (userDisplay) userDisplay.innerText = currentUser.display_name;
-        if (statusTag) {
-            statusTag.innerText = 'ACTIVE_LINK';
-            statusTag.className = "mono text-[9px] py-1 px-3 bg-emerald-500/10 border border-emerald-500/20 rounded-full text-emerald-500 uppercase tracking-widest font-bold";
-        }
-        console.log(`Access_Granted: Welcome, ${currentUser.display_name}`);
-    } else {
-        // セッション無効
-        localStorage.removeItem('nex_token');
-        setupGuestUI();
+        document.getElementById('auth-nav').classList.add('hidden');
+        document.getElementById('user-profile').classList.remove('hidden');
+        document.getElementById('user-display').innerText = currentUser.display_name;
     }
-
-    // どちらの状態でもアプリ（メッセージ読み込み等）を起動
     init();
 }
-
-function setupGuestUI() {
-    const authNav = document.getElementById('auth-nav');
-    const userProfile = document.getElementById('user-profile');
-    const statusTag = document.getElementById('status');
-    const overlay = document.getElementById('auth-overlay');
-
-    if (authNav) authNav.classList.remove('hidden');
-    if (userProfile) userProfile.classList.add('hidden');
-    if (statusTag) statusTag.innerText = 'GUEST_MODE';
-    
-    // ゲストでも中身は見れるようにオーバーレイを隠す（必要なら）
-    if (overlay) overlay.classList.add('hidden'); 
-    
-    console.log("Status: Guest_Mode");
-    init();
-}
-
-async function handleLogout() {
-    const token = localStorage.getItem('nex_token');
-    if (token) {
-        await supabase.from('nex_sessions').delete().eq('token', token);
-    }
-    localStorage.removeItem('nex_token');
-    location.reload();
-}
-
-// --- 3. APP LOGIC ---
 
 async function loadMessages(boxId) {
-    const feed = document.getElementById('feed')
-    const { data, error } = await supabase
+    const feed = document.getElementById('feed');
+    const { data } = await supabase
         .from('messages')
         .select('*')
         .eq('box_id', boxId)
-        .order('created_at', { ascending: true })
+        .order('created_at', { ascending: true });
 
-    if (error) return console.error(error)
-
-    feed.innerHTML = data.map(msg => `
-        <article class="border-l border-zinc-800 pl-4 py-1">
-            <div class="flex items-center gap-2 mb-1">
-                <span class="text-[10px] font-bold text-zinc-500 uppercase">${msg.sender || 'ANON'}</span>
-                <span class="text-[9px] text-zinc-700">${new Date(msg.created_at).toLocaleTimeString()}</span>
-            </div>
-            <p class="text-sm text-zinc-300">${msg.content}</p>
-        </article>
-    `).join('')
-    feed.scrollTop = feed.scrollHeight
-}
-
-async function sendLog() {
-    const input = document.getElementById('message-input');
-    const overlay = document.getElementById('auth-overlay');
-
-    // ログインしていない場合は送信させずにゲートを表示
-    if (!currentUser) {
-        if (overlay) overlay.classList.remove('hidden');
-        return;
-    }
-
-    if (!input.value.trim() || !currentBoxId) return;
-
-    const { error } = await supabase.from('messages').insert({
-        content: input.value,
-        box_id: currentBoxId,
-        sender: currentUser.display_name
-    });
-
-    if (!error) {
-        input.value = '';
-    } else {
-        console.error("Transmission_Error:", error);
+    if (data) {
+        feed.innerHTML = data.map(msg => `
+            <article class="border-l border-emerald-500/30 pl-4 py-2 animate-in fade-in slide-in-from-left-2">
+                <div class="flex items-center gap-2 mb-1">
+                    <span class="text-[10px] font-bold text-emerald-500 uppercase mono tracking-tighter">${msg.sender}</span>
+                    <span class="text-[8px] text-zinc-600 mono">${new Date(msg.created_at).toLocaleTimeString()}</span>
+                </div>
+                <p class="text-sm text-zinc-300 leading-relaxed">${msg.content}</p>
+                ${msg.image_url ? `
+                    <div class="mt-3 rounded-xl overflow-hidden border border-white/5 max-w-sm">
+                        <img src="${msg.image_url}" class="w-full h-auto object-cover opacity-80 hover:opacity-100 transition-opacity">
+                    </div>
+                ` : ''}
+            </article>
+        `).join('');
+        feed.scrollTop = feed.scrollHeight;
     }
 }
 
-function subscribe(boxId) {
-    supabase.removeAllChannels()
-    supabase.channel('logs')
-        .on('postgres_changes', { 
-            event: 'INSERT', 
-            schema: 'public', 
-            table: 'messages', 
-            filter: `box_id=eq.${boxId}` 
-        }, () => loadMessages(boxId))
-        .subscribe()
-}
-
-// --- Modal Logic ---
-const postModal = document.getElementById('post-modal');
-const openModalBtn = document.getElementById('open-post-modal');
-const closeModalBtn = document.getElementById('close-post-modal');
-const modalTransmitBtn = document.getElementById('modal-transmit-btn');
-const modalSectorName = document.getElementById('modal-sector-name');
-const modalContent = document.getElementById('modal-content');
-
-// 開く
-openModalBtn.onclick = () => {
-    if (!currentUser) {
-        document.getElementById('auth-overlay').classList.remove('hidden');
-        return;
-    }
-    // 現在選択中のセクター名を表示
-    modalSectorName.innerText = document.getElementById('current-title').innerText;
-    postModal.classList.remove('hidden');
-    modalContent.focus();
-};
-
-// 閉じる
-closeModalBtn.onclick = () => postModal.classList.add('hidden');
-
-// モーダル内からの送信
-modalTransmitBtn.onclick = async () => {
-    const content = modalContent.value.trim();
-    if (!content || !currentBoxId || !currentUser) return;
-
-    modalTransmitBtn.innerText = 'TRANSMITTING...';
-    modalTransmitBtn.disabled = true;
-
-    const { error } = await supabase.from('messages').insert({
-        content: content,
-        box_id: currentBoxId,
-        sender: currentUser.display_name
-    });
-
-    if (!error) {
-        modalContent.value = '';
-        postModal.classList.add('hidden');
-    } else {
-        alert("送信失敗: " + error.message);
-    }
-
-    modalTransmitBtn.innerText = 'TRANSMIT_LOG';
-    modalTransmitBtn.disabled = false;
-};
-
+// ... init(), subscribe() などの既存ロジック ...
 async function init() {
-    const { data: boxes } = await supabase.from('boxes').select('*')
-    const boxList = document.getElementById('box-list')
-
+    const { data: boxes } = await supabase.from('boxes').select('*');
     if (boxes && boxes.length > 0) {
-        boxList.innerHTML = boxes.map(box => `
-            <li class="cursor-pointer p-2 text-xs hover:bg-zinc-900 rounded transition" data-id="${box.id}">
-                # ${box.title}
+        const list = document.getElementById('box-list');
+        list.innerHTML = boxes.map(b => `
+            <li class="cursor-pointer p-3 text-[11px] hover:bg-white/5 rounded-xl transition-all mono uppercase tracking-widest text-zinc-500 hover:text-white" data-id="${b.id}">
+                # ${b.title}
             </li>
-        `).join('')
-
-        if (!currentBoxId) {
-            currentBoxId = boxes[0].id
-            document.getElementById('current-title').innerText = boxes[0].title
-            loadMessages(currentBoxId)
-            subscribe(currentBoxId)
-        }
-
-        boxList.querySelectorAll('li').forEach(el => {
-            el.onclick = () => {
-                currentBoxId = el.dataset.id
-                document.getElementById('current-title').innerText = el.innerText
-                loadMessages(currentBoxId)
-                subscribe(currentBoxId)
-            }
-        })
+        `).join('');
+        
+        currentBoxId = boxes[0].id;
+        document.getElementById('current-title').innerText = boxes[0].title;
+        loadMessages(currentBoxId);
+        
+        list.querySelectorAll('li').forEach(li => {
+            li.onclick = () => {
+                currentBoxId = li.dataset.id;
+                document.getElementById('current-title').innerText = li.innerText;
+                loadMessages(currentBoxId);
+            };
+        });
     }
 }
 
-// --- 4. EVENT LISTENERS ---
-document.addEventListener('DOMContentLoaded', () => {
-    checkAuthAndInit();
-
-    const sendBtn = document.getElementById('send-btn');
-    const logoutBtn = document.getElementById('logout-btn');
-    const msgInput = document.getElementById('message-input');
-
-    if (sendBtn) sendBtn.onclick = sendLog;
-    if (logoutBtn) logoutBtn.onclick = handleLogout;
-    
-    if (msgInput) {
-        msgInput.onkeydown = (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                sendLog();
-            }
-        }
-    }
-});
+document.addEventListener('DOMContentLoaded', checkAuth);
